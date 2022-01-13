@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -118,7 +119,7 @@ int main(int argc, char *argv[])
 	xdg_surface_get_toplevel(xdg_surface);
 	wl_surface_commit(state.surface);
 
-	while (wl_display_dispatch(display)) {
+	while (wl_display_dispatch(display) != -1) {
 	}
 
 	return 0;
