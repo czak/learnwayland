@@ -1,5 +1,6 @@
 BIN = sample
 OBJ = main.o \
+	  app.o \
 	  ../common/shm.o \
 	  ../protocols/xdg-shell-protocol.o
 LIB = -lwayland-client -lrt
