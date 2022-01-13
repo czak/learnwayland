@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -10,6 +11,7 @@
 struct app_state {
 	struct wl_surface *surface;
 	struct wl_buffer *buffer;
+	bool running;
 };
 
 // globals
@@ -46,6 +48,8 @@ static struct wl_buffer *draw_frame()
 	return buffer;
 }
 
+
+static void noop() {}
 
 // --- wl_registry callbacks ---
 
@@ -85,15 +89,30 @@ static const struct wl_registry_listener registry_listener = {
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
+	struct app_state *state = data;
 	xdg_surface_ack_configure(xdg_surface, serial);
 	
-	struct app_state *state = data;
 	wl_surface_attach(state->surface, state->buffer, 0, 0);
 	wl_surface_commit(state->surface);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
 	.configure = xdg_surface_configure,
+};
+
+
+// --- xdg_toplevel callbacks ---
+
+// https://wayland.app/protocols/xdg-shell#xdg_toplevel:event:close
+static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
+{
+	struct app_state *state = data;
+	state->running = false;
+}
+
+static const struct xdg_toplevel_listener xdg_toplevel_listener = {
+	.configure = noop,
+	.close = xdg_toplevel_close,
 };
 
 
@@ -111,15 +130,18 @@ int main(int argc, char *argv[])
 	struct app_state state = {
 		.surface = wl_compositor_create_surface(compositor),
 		.buffer = draw_frame(),
+		.running = true,
 	};
 
 	// Give the xdg_toplevel role to the surface
 	struct xdg_surface *xdg_surface = xdg_wm_base_get_xdg_surface(xdg_wm_base, state.surface);
 	xdg_surface_add_listener(xdg_surface, &xdg_surface_listener, &state);
-	xdg_surface_get_toplevel(xdg_surface);
+	struct xdg_toplevel *xdg_toplevel = xdg_surface_get_toplevel(xdg_surface);
+	xdg_toplevel_add_listener(xdg_toplevel, &xdg_toplevel_listener, &state);
+
 	wl_surface_commit(state.surface);
 
-	while (wl_display_dispatch(display) != -1) {
+	while (state.running && wl_display_dispatch(display) != -1) {
 	}
 
 	return 0;
