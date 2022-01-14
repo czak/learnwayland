@@ -33,7 +33,7 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 	wl_callback_add_listener(frame_callback, &frame_listener, window);
 
 	wl_surface_attach(window->wl_surface, buffer->wl_buffer, 0, 0);
-	wl_surface_damage(window->wl_surface, 0, 0, window->width, window->height);
+	wl_surface_damage_buffer(window->wl_surface, 0, 0, window->width, window->height);
 	wl_surface_commit(window->wl_surface);
 
 	buffer->busy = 1;
