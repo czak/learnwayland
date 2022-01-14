@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdio.h>
 #include <wayland-client.h>
 
 #include "display.h"
@@ -27,8 +26,6 @@ static void on_draw(uint32_t *pixels)
 
 static void on_key(uint32_t key)
 {
-	fprintf(stderr, "key: %d\n", key);
-
 	if (key == KEY_ESC) {
 		running = 0;
 	}
@@ -52,8 +49,6 @@ int main(int argc, char **argv)
   destroy_input(input);
   destroy_window(window);
   destroy_display(display);
-
-  fprintf(stderr, "all done.\n");
 
   return 0;
 }
