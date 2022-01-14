@@ -1,6 +1,8 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
+#include <stdint.h>
+
 struct window {
 	struct display *display;
 
@@ -12,9 +14,11 @@ struct window {
 	int height;
 
 	struct buffer *buffer;
+
+	void (*on_draw)(uint32_t *);
 };
 
-struct window *create_window(struct display *display, int width, int height);
+struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t *));
 void destroy_window(struct window *window);
 
 #endif

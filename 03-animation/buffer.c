@@ -16,12 +16,12 @@ struct buffer *create_buffer(struct display *display, int width, int height)
 	struct buffer *buffer = calloc(1, sizeof(*buffer));
 
 	int fd = allocate_shm_file(size);
-
 	struct wl_shm_pool *pool = wl_shm_create_pool(display->wl_shm, fd,  size);
 
 	buffer->wl_buffer = wl_shm_pool_create_buffer(pool, 0,
 			width, height, stride, WL_SHM_FORMAT_XRGB8888);
 	buffer->data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer->size = size;
 
 	wl_shm_pool_destroy(pool);
 	close(fd);
@@ -33,6 +33,9 @@ void destroy_buffer(struct buffer *buffer)
 {
 	if (buffer->wl_buffer)
 		wl_buffer_destroy(buffer->wl_buffer);
+
+	if (buffer->data)
+		munmap(buffer->data, buffer->size);
 
 	free(buffer);
 }
