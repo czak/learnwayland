@@ -7,6 +7,7 @@ struct buffer {
 	struct wl_buffer *wl_buffer;
 	void *data;
 	size_t size;
+	int busy;
 };
 
 struct buffer *create_buffer(struct display *display, int width, int height);

@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <wayland-client.h>
 
@@ -23,6 +23,8 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 	struct window *window = data;
 	struct buffer *buffer = window->buffers[window->current_buffer_index];
 
+	assert(!buffer->busy);
+
 	if (window->on_draw)
 		window->on_draw(buffer->data, time);
 
@@ -33,6 +35,8 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 	wl_surface_attach(window->wl_surface, buffer->wl_buffer, 0, 0);
 	wl_surface_damage(window->wl_surface, 0, 0, window->width, window->height);
 	wl_surface_commit(window->wl_surface);
+
+	buffer->busy = 1;
 
 	// Switch to the other buffer
 	window->current_buffer_index = 1 - window->current_buffer_index;
