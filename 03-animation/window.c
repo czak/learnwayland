@@ -53,6 +53,8 @@ struct window *create_window(struct display *display, int width, int height, voi
 	window->on_draw = on_draw;
 	window->on_close = on_close;
 
+	window->buffer = create_buffer(display, width, height);
+
 	window->wl_surface = wl_compositor_create_surface(display->wl_compositor);
 	window->xdg_surface = xdg_wm_base_get_xdg_surface(display->xdg_wm_base,
 			window->wl_surface);
@@ -63,8 +65,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 	// not resizable
 	xdg_toplevel_set_min_size(window->xdg_toplevel, width, height);
 	xdg_toplevel_set_max_size(window->xdg_toplevel, width, height);
-
-	window->buffer = create_buffer(display, width, height);
 
 	wl_surface_commit(window->wl_surface);
 

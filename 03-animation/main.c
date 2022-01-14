@@ -6,6 +6,8 @@
 #include "window.h"
 #include "input.h"
 
+const uint32_t KEY_ESC = 1;
+
 static int running = 1;
 
 static void on_close()
@@ -27,8 +29,7 @@ static void on_key(uint32_t key)
 {
 	fprintf(stderr, "key: %d\n", key);
 
-	// ESC
-	if (key == 1) {
+	if (key == KEY_ESC) {
 		running = 0;
 	}
 }
