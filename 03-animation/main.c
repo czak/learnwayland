@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdint.h>
 #include <wayland-client.h>
 
@@ -7,6 +8,9 @@
 
 const uint32_t KEY_ESC = 1;
 
+const int WIDTH = 512;
+const int HEIGHT = 512;
+
 static int running = 1;
 
 static void on_close()
@@ -14,12 +18,12 @@ static void on_close()
 	running = 0;
 }
 
-static void on_draw(uint32_t *pixels)
+static void on_draw(uint32_t *pixels, uint32_t time)
 {
-	for (int y=0; y<256; y++) {
-		for (int x=0; x<256; x++) {
-			uint8_t n = x ^ y;
-			pixels[y * 256 + x] = (n << 16) + (n << 8) + n;
+	for (int y=0; y<HEIGHT; y++) {
+		for (int x=0; x<WIDTH; x++) {
+			uint8_t n = ((x + time) / 128) % 2 * 128 + y;
+			pixels[y * WIDTH + x] = (n << 16) + (n << 8) + n;
 		}
 	}
 }
@@ -39,7 +43,7 @@ int main(int argc, char **argv)
   struct input *input;
 
   display = create_display();
-  window = create_window(display, 256, 256, on_draw, on_close);
+  window = create_window(display, WIDTH, HEIGHT, on_draw, on_close);
   input = create_input(display, on_key);
 
   while (running && wl_display_dispatch(display->wl_display) != -1) {

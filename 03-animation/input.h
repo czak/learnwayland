@@ -8,10 +8,10 @@ struct input {
 
 	struct wl_keyboard *wl_keyboard;
 
-	void (*on_key)(uint32_t);
+	void (*on_key)(uint32_t key);
 };
 
-struct input* create_input(struct display *display, void (*on_key)(uint32_t));
+struct input* create_input(struct display *display, void (*on_key)(uint32_t key));
 void destroy_input(struct input *input);
 
 #endif
