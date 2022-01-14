@@ -43,7 +43,7 @@ int main(int argc, char **argv)
   input = create_input(display, on_key);
 
   while (running && wl_display_dispatch(display->wl_display) != -1) {
-    // main loop
+	  // main loop
   }
 
   destroy_input(input);
