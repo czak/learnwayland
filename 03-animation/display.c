@@ -19,6 +19,10 @@ static void wl_registry_global(void *data, struct wl_registry *registry,
 		d->wl_compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
 	}
 
+	else if (strcmp(interface, wl_seat_interface.name) == 0) {
+		d->wl_seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+	}
+
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		d->xdg_wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
 	}

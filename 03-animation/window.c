@@ -7,6 +7,10 @@
 #include "window.h"
 #include "buffer.h"
 
+static void noop()
+{
+}
+
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
@@ -14,7 +18,8 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	window->on_draw(window->buffer->data);
+	if (window->on_draw)
+		window->on_draw(window->buffer->data);
 
 	wl_surface_attach(window->wl_surface, window->buffer->wl_buffer, 0, 0);
 	wl_surface_commit(window->wl_surface);
@@ -24,7 +29,20 @@ static const struct xdg_surface_listener xdg_surface_listener = {
 	.configure = xdg_surface_configure,
 };
 
-struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t *))
+static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
+{
+	struct window *window = data;
+
+	if (window->on_close)
+		window->on_close();
+}
+
+static const struct xdg_toplevel_listener xdg_toplevel_listener = {
+	.configure = noop,
+	.close = xdg_toplevel_close,
+};
+
+struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t *), void (*on_close)())
 {
 	struct window *window;
 
@@ -33,11 +51,14 @@ struct window *create_window(struct display *display, int width, int height, voi
 	window->width = width;
 	window->height = height;
 	window->on_draw = on_draw;
+	window->on_close = on_close;
 
 	window->wl_surface = wl_compositor_create_surface(display->wl_compositor);
 	window->xdg_surface = xdg_wm_base_get_xdg_surface(display->xdg_wm_base,
 			window->wl_surface);
+	xdg_surface_add_listener(window->xdg_surface, &xdg_surface_listener, window);
 	window->xdg_toplevel = xdg_surface_get_toplevel(window->xdg_surface);
+	xdg_toplevel_add_listener(window->xdg_toplevel, &xdg_toplevel_listener, window);
 
 	// not resizable
 	xdg_toplevel_set_min_size(window->xdg_toplevel, width, height);
@@ -45,11 +66,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 
 	window->buffer = create_buffer(display, width, height);
 
-	xdg_surface_add_listener(window->xdg_surface, &xdg_surface_listener, window);
-	// TODO: handle close
-	// xdg_toplevel_add_listener(window->xdg_toplevel, &xdg_toplevel_listener, window);
-	
-	// TODO: is this necessary? does this trigger first configure?
 	wl_surface_commit(window->wl_surface);
 
 	return window;

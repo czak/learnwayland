@@ -6,6 +6,7 @@ struct display {
 	struct wl_registry *wl_registry;
 	struct wl_shm *wl_shm;
 	struct wl_compositor *wl_compositor;
+	struct wl_seat *wl_seat;
 	struct xdg_wm_base *xdg_wm_base;
 };
 
