@@ -22,10 +22,11 @@ static void on_draw(uint32_t *pixels, uint32_t time)
 {
 	for (int y=0; y<HEIGHT; y++) {
 		for (int x=0; x<WIDTH; x++) {
-			uint32_t d = time / 10;
-			uint8_t r = (x + d) ^ y;
-			uint8_t g = (x + d) ^ (y + d);
-			uint8_t b = x  ^ (y + d);
+			uint32_t d1 = time / 10;
+			uint32_t d2 = time / 5;
+			uint8_t r = (x + d2) ^ y;
+			uint8_t g = (x + d1) ^ (y + d2);
+			uint8_t b = x  ^ (y + d1);
 			pixels[y * WIDTH + x] = (r << 16) + (g << 8) + b;
 		}
 	}
