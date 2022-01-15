@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
@@ -9,7 +10,10 @@
 
 #include "display.h"
 #include "window.h"
-#include "buffer.h"
+
+static void noop()
+{
+}
 
 static void frame(void *data, struct wl_callback *wl_callback, uint32_t time);
 
@@ -17,42 +21,19 @@ static const struct wl_callback_listener frame_listener = {
 	.done = frame,
 };
 
-static void noop()
-{
-}
-
 static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
 	struct window *window = data;
 
-	glClearColor(0.2f, 1.0f, 0.3f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	// Request next frame
+	struct wl_callback *frame_callback = wl_surface_frame(window->wl_surface);
+	wl_callback_add_listener(frame_callback, &frame_listener, window);
+
+	if (window->on_draw)
+		window->on_draw(time);
+
 	eglSwapBuffers(window->display->egl_display, window->egl_surface);
 }
-
-/* static void frame(void *data, struct wl_callback *wl_callback, uint32_t time) */
-/* { */
-/* 	struct window *window = data; */
-/* 	struct buffer *buffer = window->buffers[window->current_buffer_index]; */
-/*  */
-/* 	assert(!buffer->busy); */
-/*  */
-/* 	if (window->on_draw) */
-/* 		window->on_draw(buffer->data, time); */
-/*  */
-/* 	// Request next frame */
-/* 	struct wl_callback *frame_callback = wl_surface_frame(window->wl_surface); */
-/* 	wl_callback_add_listener(frame_callback, &frame_listener, window); */
-/*  */
-/* 	wl_surface_attach(window->wl_surface, buffer->wl_buffer, 0, 0); */
-/* 	wl_surface_damage_buffer(window->wl_surface, 0, 0, window->width, window->height); */
-/* 	wl_surface_commit(window->wl_surface); */
-/*  */
-/* 	buffer->busy = 1; */
-/*  */
-/* 	// Switch to the other buffer */
-/* 	window->current_buffer_index = 1 - window->current_buffer_index; */
-/* } */
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
@@ -62,6 +43,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 	xdg_surface_ack_configure(xdg_surface, serial);
 
 	if (!window->configured) {
+		frame(window, NULL, 0);
 		window->configured = 1;
 	}
 }
@@ -83,7 +65,7 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 	.close = xdg_toplevel_close,
 };
 
-struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t *pixels, uint32_t time), void (*on_close)())
+struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t time), void (*on_close)())
 {
 	struct window *window;
 
@@ -94,9 +76,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 	window->on_draw = on_draw;
 	window->on_close = on_close;
 	window->configured = 0;
-
-	window->buffers[0] = create_buffer(display, width, height);
-	window->buffers[1] = create_buffer(display, width, height);
 
 	window->wl_surface = wl_compositor_create_surface(display->wl_compositor);
 	window->xdg_surface = xdg_wm_base_get_xdg_surface(display->xdg_wm_base,
@@ -124,11 +103,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 
 void destroy_window(struct window *window)
 {
-	if (window->buffers[0])
-		destroy_buffer(window->buffers[0]);
-	if (window->buffers[1])
-		destroy_buffer(window->buffers[1]);
-
 	if (window->xdg_toplevel)
 		xdg_toplevel_destroy(window->xdg_toplevel);
 	if (window->xdg_surface)

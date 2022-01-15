@@ -15,23 +15,27 @@ const int HEIGHT = 512;
 
 static int running = 1;
 
+static int start_time = 0;
+static int end_time = 0;
+static int frames = 0;
+
 static void on_close()
 {
 	running = 0;
 }
 
-static void on_draw(uint32_t *pixels, uint32_t time)
+static void on_draw(uint32_t time)
 {
-	for (int y=0; y<HEIGHT; y++) {
-		for (int x=0; x<WIDTH; x++) {
-			uint32_t d1 = time / 10;
-			uint32_t d2 = time / 5;
-			uint8_t r = (x + d2) ^ y;
-			uint8_t g = (x + d1) ^ (y + d2);
-			uint8_t b = x  ^ (y + d1);
-			pixels[y * WIDTH + x] = (r << 16) + (g << 8) + b;
-		}
-	}
+	float f = (time % 2000) / 3000.f;
+
+	glClearColor(f, f, 0.3f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	// Count frames
+	if (!start_time) start_time = time;
+	end_time = time;
+	++frames;
+
 }
 
 static void on_key(uint32_t key)
@@ -54,16 +58,11 @@ int main(int argc, char **argv)
 
 	int ret;
 	while (running && ret != -1) {
-		if (!window->configured) {
-			ret = wl_display_dispatch(display->wl_display);
-		} else {
-			ret = wl_display_dispatch_pending(display->wl_display);
-
-			glClearColor(0.2f, 1.0f, 0.3f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
-			eglSwapBuffers(window->display->egl_display, window->egl_surface);
-		}
+		ret = wl_display_dispatch(display->wl_display);
 	}
+
+	float duration = (end_time - start_time) / 1000.0f;
+	fprintf(stderr, "%d frames in %f s = %f FPS", frames, duration, frames / duration);
 
 	destroy_input(input);
 	destroy_window(window);
