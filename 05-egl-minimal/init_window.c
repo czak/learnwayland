@@ -42,8 +42,8 @@ struct _escontext ESContext = {
 #define TRUE 1
 #define FALSE 0
 
-#define WINDOW_WIDTH 1280
-#define WINDOW_HEIGHT 720
+#define WINDOW_WIDTH 256
+#define WINDOW_HEIGHT 256
 
 bool program_alive;
 int32_t old_w, old_h;
@@ -311,10 +311,12 @@ int main() {
 	XDGToplevel = xdg_surface_get_toplevel(XDGSurface);
 	xdg_toplevel_set_title(XDGToplevel, "Wayland EGL example");
 	xdg_toplevel_add_listener(XDGToplevel, &xdg_toplevel_listener, NULL);
+	xdg_toplevel_set_min_size(XDGToplevel, WINDOW_WIDTH, WINDOW_HEIGHT);
+	xdg_toplevel_set_max_size(XDGToplevel, WINDOW_WIDTH, WINDOW_HEIGHT);
 
 	wl_surface_commit(surface);
 
-	CreateWindowWithEGLContext("Nya", 1280, 720);
+	CreateWindowWithEGLContext("Nya", WINDOW_WIDTH, WINDOW_HEIGHT);
 
 	program_alive = true;
 
