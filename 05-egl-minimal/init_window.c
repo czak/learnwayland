@@ -1,21 +1,15 @@
-#include <wayland-client-core.h>
-#include <wayland-client.h>
-#include <wayland-server.h>
-#include <wayland-client-protocol.h>
-#include <wayland-egl.h> // Wayland EGL MUST be included before EGL headers
-
-#include "../protocols/xdg-shell-client-protocol.h"
-
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <stdbool.h>
 #include <math.h>
-
 #include <sys/time.h>
-
+#include <wayland-client.h>
+#include <wayland-egl.h> // Wayland EGL MUST be included before EGL headers
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
+
+#include "../protocols/xdg-shell-client-protocol.h"
 
 #if defined(DEBUG)
 #define LOG(...) fprintf(stderr, __VA_ARGS__)
@@ -26,7 +20,6 @@
 struct wl_compositor *compositor = NULL;
 struct wl_surface *surface;
 struct wl_egl_window *egl_window;
-struct wl_region *region;
 
 struct xdg_wm_base *XDGWMBase;
 struct xdg_surface *XDGSurface;
@@ -35,16 +28,16 @@ struct xdg_toplevel *XDGToplevel;
 
 struct _escontext
 {
-  /// Native System informations
-  EGLNativeDisplayType native_display;
-  EGLNativeWindowType native_window;
-  uint16_t window_width, window_height;
-  /// EGL display
-  EGLDisplay  display;
-  /// EGL context
-  EGLContext  context;
-  /// EGL surface
-  EGLSurface  surface;
+	/// Native System informations
+	EGLNativeDisplayType native_display;
+	EGLNativeWindowType native_window;
+	uint16_t window_width, window_height;
+	/// EGL display
+	EGLDisplay  display;
+	/// EGL context
+	EGLContext  context;
+	/// EGL surface
+	EGLSurface  surface;
 };
 
 struct _escontext ESContext = {
@@ -64,24 +57,8 @@ struct _escontext ESContext = {
 #define WINDOW_HEIGHT 256
 
 bool program_alive;
-int32_t old_w, old_h;
 
-static void xdg_toplevel_handle_configure(void *data,
-		struct xdg_toplevel *xdg_toplevel, int32_t w, int32_t h,
-		struct wl_array *states) {
-
-	// no window geometry event, ignore
-	if(w == 0 && h == 0) return;
-
-	// window resized
-	if(old_w != w && old_h != h) {
-		old_w = w;
-		old_h = h;
-
-		wl_egl_window_resize(ESContext.native_window, w, h, 0, 0);
-		wl_surface_commit(surface);
-	}
-}
+static void noop() {}
 
 static void xdg_toplevel_handle_close(void *data,
 		struct xdg_toplevel *xdg_toplevel) {
@@ -90,40 +67,22 @@ static void xdg_toplevel_handle_close(void *data,
 }
 
 struct xdg_toplevel_listener xdg_toplevel_listener = {
-	.configure = xdg_toplevel_handle_configure,
+	.configure = noop,
 	.close = xdg_toplevel_handle_close,
 };
 
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial) {
-	// confirm that you exist to the compositor
 	xdg_surface_ack_configure(xdg_surface, serial);
-
 }
 
 const struct xdg_surface_listener xdg_surface_listener = {
 	.configure = xdg_surface_configure,
 };
 
-static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base,
-		uint32_t serial) {
-	xdg_wm_base_pong(xdg_wm_base, serial);
-}
-
-const struct xdg_wm_base_listener xdg_wm_base_listener = {
-	.ping = xdg_wm_base_ping,
-};
 
 void CreateNativeWindow(char *title, int width, int height) {
-	old_w = WINDOW_WIDTH;
-	old_h = WINDOW_HEIGHT;
-
-	region = wl_compositor_create_region(compositor);
-
-	wl_region_add(region, 0, 0, width, height);
-	wl_surface_set_opaque_region(surface, region);
-
 	struct wl_egl_window *egl_window = 
 		wl_egl_window_create(surface, width, height);
 
@@ -135,7 +94,6 @@ void CreateNativeWindow(char *title, int width, int height) {
 	ESContext.window_width = width;
 	ESContext.window_height = height;
 	ESContext.native_window = egl_window;
-
 }
 
 EGLBoolean CreateEGLContext ()
@@ -148,14 +106,11 @@ EGLBoolean CreateEGLContext ()
 	EGLConfig config;
 	EGLint fbAttribs[] =
 	{
-		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-		EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
 		EGL_RED_SIZE,        8,
 		EGL_GREEN_SIZE,      8,
 		EGL_BLUE_SIZE,       8,
 		EGL_NONE
 	};
-	EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE, EGL_NONE };
 	EGLDisplay display = eglGetDisplay( ESContext.native_display );
 	if ( display == EGL_NO_DISPLAY )
 	{
@@ -167,13 +122,6 @@ EGLBoolean CreateEGLContext ()
 	if ( !eglInitialize(display, &majorVersion, &minorVersion) )
 	{
 		LOG("No Initialisation...\n");
-		return EGL_FALSE;
-	}
-
-	// Get configs
-	if ( (eglGetConfigs(display, NULL, 0, &numConfigs) != EGL_TRUE) || (numConfigs == 0))
-	{
-		LOG("No configuration...\n");
 		return EGL_FALSE;
 	}
 
@@ -193,7 +141,7 @@ EGLBoolean CreateEGLContext ()
 	}
 
 	// Create a GL context
-	context = eglCreateContext(display, config, EGL_NO_CONTEXT, contextAttribs );
+	context = eglCreateContext(display, config, EGL_NO_CONTEXT, NULL );
 	if ( context == EGL_NO_CONTEXT )
 	{
 		LOG("No context...\n");
@@ -213,41 +161,10 @@ EGLBoolean CreateEGLContext ()
 	return EGL_TRUE;
 }
 
-EGLBoolean CreateWindowWithEGLContext(char *title, int width, int height) {
-	CreateNativeWindow(title, width, height);
-	return CreateEGLContext();
-}
-
 void draw() {
 	glClearColor(0.5, 0.3, 0.0, 1.0);
-
-	//struct timeval tv;
-
-	//gettimeofday(&tv, NULL);
-
-	//float time = tv.tv_sec + tv.tv_usec/1000000.0;
-
-	//static GLfloat vertex_data[] = {
-	//	0.6, 0.6, 1.0,
-	//	-0.6, -0.6, 1.0,
-	//	0.0, 1.0, 1.0
-	//};
-
-	//for(int i=0; i<3; i++) {
-	//	vertex_data[i*3+0] = vertex_data[i*3+0]*cos(time) - vertex_data[i*3+1]*sin(time); 
-	//	vertex_data[i*3+1] = vertex_data[i*3+0]*sin(time) + vertex_data[i*3+1]*cos(time); 
-	//}
-
 	glClear(GL_COLOR_BUFFER_BIT);
-
-	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vertex_data);
-	//glEnableVertexAttribArray(0);
-
-	//glDrawArrays(GL_TRIANGLES, 0, 3);
 }
-
-unsigned long last_click = 0;
-void RefreshWindow() { eglSwapBuffers(ESContext.display, ESContext.surface); }
 
 static void global_registry_handler
 (void *data, struct wl_registry *registry, uint32_t id,
@@ -259,36 +176,19 @@ static void global_registry_handler
 	else if(strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		XDGWMBase = wl_registry_bind(registry, id,
 				&xdg_wm_base_interface, 1);
-		xdg_wm_base_add_listener(XDGWMBase, &xdg_wm_base_listener, NULL);
 	} 
 }
 
-static void global_registry_remover
-(void *data, struct wl_registry *registry, uint32_t id) {
-	LOG("Got a registry losing event for %d\n", id);
-}
-
-const struct wl_registry_listener listener = {
-	global_registry_handler,
-	global_registry_remover
+const struct wl_registry_listener wl_registry_listener = {
+	.global = global_registry_handler,
+	.global_remove = noop,
 };
 
 static void
 get_server_references() {
-
 	struct wl_display * display = wl_display_connect(NULL);
-	if (display == NULL) {
-		LOG("Can't connect to wayland display !?\n");
-		exit(1);
-	}
-	LOG("Got a display !");
-
-	struct wl_registry *wl_registry =
-		wl_display_get_registry(display);
-	wl_registry_add_listener(wl_registry, &listener, NULL);
-
-	// This call the attached listener global_registry_handler
-	wl_display_dispatch(display);
+	struct wl_registry *wl_registry = wl_display_get_registry(display);
+	wl_registry_add_listener(wl_registry, &wl_registry_listener, NULL);
 	wl_display_roundtrip(display);
 
 	// If at this point, global_registry_handler didn't set the 
@@ -334,14 +234,15 @@ int main() {
 
 	wl_surface_commit(surface);
 
-	CreateWindowWithEGLContext("Nya", WINDOW_WIDTH, WINDOW_HEIGHT);
+	CreateNativeWindow("Test", WINDOW_WIDTH, WINDOW_HEIGHT);
+	CreateEGLContext();
 
 	program_alive = true;
 
 	while (program_alive) {
 		wl_display_dispatch_pending(ESContext.native_display);
 		draw();
-		RefreshWindow();
+		eglSwapBuffers(ESContext.display, ESContext.surface);
 	}
 
 	destroy_window();
