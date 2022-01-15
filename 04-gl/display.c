@@ -53,7 +53,7 @@ static void init_egl(struct display* display)
 	display->egl_display = eglGetDisplay(display->wl_display);
 	eglInitialize(display->egl_display, NULL, NULL);
 	eglBindAPI(EGL_OPENGL_API);
-	eglChooseConfig(display->egl_display, attributes, display->egl_config, 1, &n);
+	eglChooseConfig(display->egl_display, attributes, &display->egl_config, 1, &n);
 	display->egl_context = eglCreateContext(display->egl_display, display->egl_config, EGL_NO_CONTEXT, NULL);
 }
 
