@@ -1,4 +1,3 @@
-// gcc -o test init_window.c -I. -lwayland-client -lwayland-server -lwayland-client-protocol -lwayland-egl -lEGL -lGLESv2
 #include <wayland-client-core.h>
 #include <wayland-client.h>
 #include <wayland-server.h>
@@ -6,9 +5,6 @@
 #include <wayland-egl.h> // Wayland EGL MUST be included before EGL headers
 
 #include "../protocols/xdg-shell-client-protocol.h"
-
-/* #include "init_window.h" */
-#include "log.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -20,6 +16,12 @@
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
+
+#if defined(DEBUG)
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define LOG(...)
+#endif
 
 struct wl_compositor *compositor = NULL;
 struct wl_surface *surface;
