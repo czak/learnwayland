@@ -7,7 +7,7 @@
 
 #include "../protocols/xdg-shell-client-protocol.h"
 
-#include "init_window.h"
+/* #include "init_window.h" */
 #include "log.h"
 
 #include <string.h>
@@ -18,6 +18,7 @@
 
 #include <sys/time.h>
 
+#include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
 struct wl_compositor *compositor = NULL;
@@ -28,6 +29,21 @@ struct wl_region *region;
 struct xdg_wm_base *XDGWMBase;
 struct xdg_surface *XDGSurface;
 struct xdg_toplevel *XDGToplevel;
+
+
+struct _escontext
+{
+  /// Native System informations
+  EGLNativeDisplayType native_display;
+  EGLNativeWindowType native_window;
+  uint16_t window_width, window_height;
+  /// EGL display
+  EGLDisplay  display;
+  /// EGL context
+  EGLContext  context;
+  /// EGL surface
+  EGLSurface  surface;
+};
 
 struct _escontext ESContext = {
 	.native_display = NULL,
