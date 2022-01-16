@@ -15,26 +15,6 @@ static void noop()
 {
 }
 
-static void frame(void *data, struct wl_callback *wl_callback, uint32_t time);
-
-static const struct wl_callback_listener frame_listener = {
-	.done = frame,
-};
-
-static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
-{
-	struct window *window = data;
-
-	// Request next frame
-	struct wl_callback *frame_callback = wl_surface_frame(window->wl_surface);
-	wl_callback_add_listener(frame_callback, &frame_listener, window);
-
-	if (window->on_draw)
-		window->on_draw(time);
-
-	eglSwapBuffers(window->display->egl_display, window->egl_surface);
-}
-
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
@@ -42,10 +22,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	if (!window->configured) {
-		frame(window, NULL, 0);
-		window->configured = 1;
-	}
+	window->configured = 1;
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -65,7 +42,7 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 	.close = xdg_toplevel_close,
 };
 
-struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t time), void (*on_close)())
+struct window *create_window(struct display *display, int width, int height, void (*on_close)())
 {
 	struct window *window;
 
@@ -73,7 +50,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 	window->display = display;
 	window->width = width;
 	window->height = height;
-	window->on_draw = on_draw;
 	window->on_close = on_close;
 	window->configured = 0;
 
@@ -93,6 +69,8 @@ struct window *create_window(struct display *display, int width, int height, voi
 	// the client must perform an initial commit without any buffer attached
 	// -- https://wayland.app/protocols/xdg-shell#xdg_surface
 	wl_surface_commit(window->wl_surface);
+	while (!window->configured)
+		wl_display_dispatch(display->wl_display);
 
 	// not resizable
 	xdg_toplevel_set_min_size(window->xdg_toplevel, width, height);

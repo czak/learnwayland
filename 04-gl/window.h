@@ -21,13 +21,12 @@ struct window {
 	int width;
 	int height;
 
-	void (*on_draw)(uint32_t time);
 	void (*on_close)();
 
 	int configured;
 };
 
-struct window *create_window(struct display *display, int width, int height, void (*on_draw)(uint32_t time), void (*on_close)());
+struct window *create_window(struct display *display, int width, int height, void (*on_close)());
 void destroy_window(struct window *window);
 
 #endif
