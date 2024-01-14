@@ -6,10 +6,10 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "protocols/xdg-decoration-unstable-v1.h"
-#include "protocols/xdg-shell.h"
 #include "protocols/single-pixel-buffer-v1.h"
 #include "protocols/viewporter.h"
+#include "protocols/xdg-decoration-unstable-v1.h"
+#include "protocols/xdg-shell.h"
 
 struct app_state {
 	// Wayland globals
@@ -99,6 +99,13 @@ static const struct xdg_surface_listener xdg_surface_listener = {
 	.configure = xdg_surface_configure,
 };
 
+static void xdg_toplevel_configure(void *data,
+		struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height,
+		struct wl_array *states)
+{
+	// TODO: width & height can be used to update contents
+}
+
 void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
 {
 	struct app_state *app = data;
@@ -107,13 +114,14 @@ void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
 }
 
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
-	.configure = noop,
+	.configure = xdg_toplevel_configure,
 	.close = xdg_toplevel_close,
 	.configure_bounds = noop,
 	.wm_capabilities = noop,
 };
 
-void app_init(struct app_state *app) {
+void app_init(struct app_state *app)
+{
 	app->wl_display = wl_display_connect(NULL);
 	app->wl_registry = wl_display_get_registry(app->wl_display);
 	wl_registry_add_listener(app->wl_registry, &registry_listener, app);
