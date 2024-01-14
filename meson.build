@@ -13,6 +13,8 @@ protocols = declare_dependency(
   sources: [
     'protocols/xdg-shell.c',
     'protocols/xdg-decoration-unstable-v1.c',
+    'protocols/single-pixel-buffer-v1.c',
+    'protocols/viewporter.c',
   ],
   include_directories: ['protocols'],
 )
