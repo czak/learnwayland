@@ -1,10 +1,8 @@
-#include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "common/shm.h"
 #include "protocols/xdg-decoration-unstable-v1.h"
 #include "protocols/xdg-shell.h"
 
@@ -85,8 +83,8 @@ static void registry_global_remove(void *data, struct wl_registry *registry,
 }
 
 static const struct wl_registry_listener registry_listener = {
-		.global = registry_global,
-		.global_remove = registry_global_remove,
+	.global = registry_global,
+	.global_remove = registry_global_remove,
 };
 
 // --- xdg_surface callbacks ---
@@ -103,7 +101,7 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
-		.configure = xdg_surface_configure,
+	.configure = xdg_surface_configure,
 };
 
 // ===== MAIN =====
@@ -118,8 +116,8 @@ int main(int argc, char *argv[])
 
 	// Init state
 	struct app_state state = {
-			.surface = wl_compositor_create_surface(compositor),
-			.buffer = draw_frame(),
+		.surface = wl_compositor_create_surface(compositor),
+		.buffer = draw_frame(),
 	};
 
 	struct xdg_surface *xdg_surface =
