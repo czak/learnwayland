@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -10,6 +11,11 @@
 #include "protocols/viewporter.h"
 #include "protocols/xdg-decoration-unstable-v1.h"
 #include "protocols/xdg-shell.h"
+
+struct buffer {
+	struct wl_buffer *wl_buffer;
+	uint32_t *pixels;
+};
 
 struct app_state {
 	// Wayland globals
@@ -29,7 +35,7 @@ struct app_state {
 	struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1;
 
 	// Surface content & transform
-	struct wl_buffer *wl_buffer;
+	struct buffer buffer;
 	struct wp_viewport *wp_viewport;
 
 	// App state
@@ -142,7 +148,7 @@ void app_init(struct app_state *app)
 
 	app->xdg_toplevel = xdg_surface_get_toplevel(app->xdg_surface);
 	xdg_toplevel_add_listener(app->xdg_toplevel, &xdg_toplevel_listener, app);
-	xdg_toplevel_set_title(app->xdg_toplevel, "Decoration sample");
+	xdg_toplevel_set_title(app->xdg_toplevel, "SHM buffer sample");
 	xdg_toplevel_set_min_size(app->xdg_toplevel, 256, 256);
 	xdg_toplevel_set_max_size(app->xdg_toplevel, 256, 256);
 
@@ -158,6 +164,25 @@ void app_init(struct app_state *app)
 	wl_surface_commit(app->wl_surface);
 }
 
+void buffer_init(struct app_state *app, struct buffer *buffer, int width,
+		int height)
+{
+	int stride = width * 4;
+	int size = height * stride;
+
+	int fd = memfd_create("buffer-pool", 0);
+	ftruncate(fd, size);
+
+	struct wl_shm_pool *pool = wl_shm_create_pool(app->wl_shm, fd, size);
+	buffer->wl_buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
+			stride, WL_SHM_FORMAT_ARGB8888);
+	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+			0);
+
+	wl_shm_pool_destroy(pool);
+	close(fd);
+}
+
 int main(int argc, char *argv[])
 {
 	struct app_state app = {
@@ -171,12 +196,21 @@ int main(int argc, char *argv[])
 	while (wl_display_dispatch(app.wl_display) != -1 && !app.configured) {
 	}
 
-	// Attach buffer
-	uint32_t shade = UINT32_MAX * 0.3;
-	app.wl_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
-			app.wp_single_pixel_buffer_manager_v1, shade, shade, shade,
-			UINT32_MAX);
-	wl_surface_attach(app.wl_surface, app.wl_buffer, 0, 0);
+	int width = 256, height = 256;
+	buffer_init(&app, &app.buffer, width, height);
+
+	uint32_t *px = app.buffer.pixels;
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint8_t r = x ^ y;
+			uint8_t g = x ^ y;
+			uint8_t b = x ^ y;
+			uint8_t a = 0xff;
+			px[y * width + x] = (a << 24) + (r << 16) + (g << 8) + b;
+		}
+	}
+
+	wl_surface_attach(app.wl_surface, app.buffer.wl_buffer, 0, 0);
 	wl_surface_commit(app.wl_surface);
 
 	// Main loop
