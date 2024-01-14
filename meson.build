@@ -4,11 +4,6 @@ add_project_arguments('-D_GNU_SOURCE', language: ['c'])
 
 wayland = dependency('wayland-client')
 
-common = declare_dependency(
-  sources: ['common/shm.c'],
-  include_directories: ['common'],
-)
-
 protocols = declare_dependency(
   sources: [
     'protocols/xdg-shell.c',
@@ -20,4 +15,5 @@ protocols = declare_dependency(
 )
 
 executable('list-globals', 'list-globals.c', dependencies: [wayland])
-executable('decorations', 'decorations.c', dependencies: [wayland, protocols, common])
+executable('decorations', 'decorations.c', dependencies: [wayland, protocols])
+executable('shm-resizable', 'shm-resizable.c', dependencies: [wayland, protocols])
