@@ -97,7 +97,6 @@ static const struct wl_registry_listener registry_listener = {
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
-	fprintf(stderr, "release\n");
 	wl_buffer_destroy(wl_buffer);
 }
 
