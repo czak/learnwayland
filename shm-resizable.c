@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/param.h>
 #include <unistd.h>
 #include <wayland-client.h>
 
@@ -12,8 +13,12 @@
 #include "protocols/xdg-decoration-unstable-v1.h"
 #include "protocols/xdg-shell.h"
 
+const int MAX_WIDTH = 1000;
+const int MAX_HEIGHT = 1000;
+
 struct buffer {
-	struct wl_buffer *wl_buffer;
+	int fd;
+	struct wl_shm_pool *wl_shm_pool;
 	uint32_t *pixels;
 };
 
@@ -39,8 +44,10 @@ struct app_state {
 	struct wp_viewport *wp_viewport;
 
 	// App state
-	bool configured;
 	bool running;
+
+	int width;
+	int height;
 };
 
 static void noop() {}
@@ -88,17 +95,36 @@ static const struct wl_registry_listener registry_listener = {
 	.global_remove = noop,
 };
 
+static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
+{
+	fprintf(stderr, "release\n");
+	wl_buffer_destroy(wl_buffer);
+}
+
+static const struct wl_buffer_listener wl_buffer_listener = {
+	.release = wl_buffer_release,
+};
+
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
 	struct app_state *app = data;
 
 	xdg_surface_ack_configure(xdg_surface, serial);
-	if (app->configured) {
-		wl_surface_commit(app->wl_surface);
-	} else {
-		app->configured = true;
-	}
+
+	// Buffer can't exceed MAX_WIDTH * MAX_HEIGHT * 4
+	int buf_width = MIN(app->width, MAX_WIDTH);
+	int buf_height = MIN(app->height, MAX_HEIGHT);
+	struct wl_buffer *wl_buffer =
+			wl_shm_pool_create_buffer(app->buffer.wl_shm_pool, 0, buf_width,
+					buf_height, buf_width * 4, WL_SHM_FORMAT_ARGB8888);
+	wl_buffer_add_listener(wl_buffer, &wl_buffer_listener, NULL);
+	wl_surface_attach(app->wl_surface, wl_buffer, 0, 0);
+
+	// Anything above is scaled via wp_viewport
+	wp_viewport_set_destination(app->wp_viewport, app->width, app->height);
+
+	wl_surface_commit(app->wl_surface);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -109,7 +135,10 @@ static void xdg_toplevel_configure(void *data,
 		struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height,
 		struct wl_array *states)
 {
-	// TODO: width & height can be used to update contents
+	struct app_state *app = data;
+
+	if (width > 0) app->width = width;
+	if (height > 0) app->height = height;
 }
 
 void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
@@ -149,11 +178,9 @@ void app_init(struct app_state *app)
 	app->xdg_toplevel = xdg_surface_get_toplevel(app->xdg_surface);
 	xdg_toplevel_add_listener(app->xdg_toplevel, &xdg_toplevel_listener, app);
 	xdg_toplevel_set_title(app->xdg_toplevel, "SHM buffer sample");
-	xdg_toplevel_set_min_size(app->xdg_toplevel, 256, 256);
-	xdg_toplevel_set_max_size(app->xdg_toplevel, 256, 256);
+	xdg_toplevel_set_app_id(app->xdg_toplevel, "learnwayland");
 
 	app->wp_viewport = wp_viewporter_get_viewport(app->wp_viewporter, app->wl_surface);
-	wp_viewport_set_destination(app->wp_viewport, 256, 256);
 
 	app->zxdg_toplevel_decoration_v1 =
 			zxdg_decoration_manager_v1_get_toplevel_decoration(
@@ -164,54 +191,39 @@ void app_init(struct app_state *app)
 	wl_surface_commit(app->wl_surface);
 }
 
-void buffer_init(struct app_state *app, struct buffer *buffer, int width,
-		int height)
+void buffer_init(struct app_state *app, struct buffer *buffer)
 {
-	int stride = width * 4;
-	int size = height * stride;
+	const size_t mem_size = MAX_WIDTH * MAX_HEIGHT * 4;
 
 	int fd = memfd_create("buffer-pool", 0);
-	ftruncate(fd, size);
+	ftruncate(fd, mem_size);
 
-	struct wl_shm_pool *pool = wl_shm_create_pool(app->wl_shm, fd, size);
-	buffer->wl_buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
-			stride, WL_SHM_FORMAT_ARGB8888);
-	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-			0);
+	buffer->wl_shm_pool = wl_shm_create_pool(app->wl_shm, fd, mem_size);
+	buffer->pixels = mmap(NULL, mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
-	wl_shm_pool_destroy(pool);
+	for (int y = 0; y < MAX_HEIGHT; y++) {
+		for (int x = 0; x < MAX_WIDTH; x++) {
+			uint8_t r = x ^ y;
+			uint8_t g = x ^ y;
+			uint8_t b = x ^ y;
+			uint8_t a = 0x7f;
+			buffer->pixels[y * MAX_WIDTH + x] = (a << 24) + (r << 16) + (g << 8) + b; 
+		}
+	}
+
 	close(fd);
 }
 
 int main(int argc, char *argv[])
 {
 	struct app_state app = {
-		.configured = false,
 		.running = true,
+		.width = 256,
+		.height = 256,
 	};
 
 	app_init(&app);
-
-	// Run loop until surface configured
-	while (wl_display_dispatch(app.wl_display) != -1 && !app.configured) {
-	}
-
-	int width = 256, height = 256;
-	buffer_init(&app, &app.buffer, width, height);
-
-	uint32_t *px = app.buffer.pixels;
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			uint8_t r = x ^ y;
-			uint8_t g = x ^ y;
-			uint8_t b = x ^ y;
-			uint8_t a = 0xff;
-			px[y * width + x] = (a << 24) + (r << 16) + (g << 8) + b;
-		}
-	}
-
-	wl_surface_attach(app.wl_surface, app.buffer.wl_buffer, 0, 0);
-	wl_surface_commit(app.wl_surface);
+	buffer_init(&app, &app.buffer);
 
 	// Main loop
 	while (wl_display_dispatch(app.wl_display) != -1 && app.running) {
