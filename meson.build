@@ -17,3 +17,4 @@ protocols = declare_dependency(
 executable('01-list-globals', '01-list-globals.c', dependencies: [wayland])
 executable('02-single-pixel-with-decorations', '02-single-pixel-with-decorations.c', dependencies: [wayland, protocols])
 executable('03-shm-buffer-resize-no-realloc', '03-shm-buffer-resize-no-realloc.c', dependencies: [wayland, protocols])
+executable('04-shm-buffer-resize-realloc', '04-shm-buffer-resize-realloc.c', dependencies: [wayland, protocols])
