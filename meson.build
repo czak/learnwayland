@@ -3,6 +3,7 @@ project('learnwayland', 'c')
 add_project_arguments('-D_GNU_SOURCE', language: ['c'])
 
 wayland = dependency('wayland-client')
+pixman = dependency('pixman-1')
 
 protocols = declare_dependency(
   sources: [
@@ -18,3 +19,4 @@ executable('01-list-globals', '01-list-globals.c', dependencies: [wayland])
 executable('02-single-pixel-with-decorations', '02-single-pixel-with-decorations.c', dependencies: [wayland, protocols])
 executable('03-shm-buffer-resize-no-realloc', '03-shm-buffer-resize-no-realloc.c', dependencies: [wayland, protocols])
 executable('04-shm-buffer-resize-realloc', '04-shm-buffer-resize-realloc.c', dependencies: [wayland, protocols])
+executable('05-pixman', '05-pixman.c', dependencies: [wayland, pixman, protocols])
