@@ -8,7 +8,6 @@
 #include <wayland-client.h>
 
 #include "../protocols/single-pixel-buffer-v1.h"
-#include "../protocols/viewporter.h"
 #include "../protocols/xdg-decoration-unstable-v1.h"
 #include "../protocols/xdg-shell.h"
 
@@ -43,11 +42,6 @@ static void registry_global(void *data, struct wl_registry *registry,
 				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
 	}
 
-	else if (strcmp(interface, wp_viewporter_interface.name) == 0) {
-		app->wp_viewporter =
-				wl_registry_bind(registry, name, &wp_viewporter_interface, 1);
-	}
-
 	else if (strcmp(interface, wp_single_pixel_buffer_manager_v1_interface.name) == 0) {
 		app->wp_single_pixel_buffer_manager_v1 =
 				wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
@@ -78,7 +72,7 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 	.release = wl_buffer_release,
 };
 
-struct buffer *create_buffer(struct app_state *app, int width, int height)
+static struct buffer *create_buffer(struct app_state *app, int width, int height)
 {
 	int size = width * height * 4;
 	int stride = width * 4;
@@ -161,7 +155,6 @@ void app_init(struct app_state *app)
 	assert(app->wl_shm &&
 			app->wl_compositor &&
 			app->xdg_wm_base &&
-			app->wp_viewporter &&
 			app->wp_single_pixel_buffer_manager_v1 &&
 			app->zxdg_decoration_manager_v1);
 
@@ -175,8 +168,6 @@ void app_init(struct app_state *app)
 	xdg_toplevel_add_listener(app->xdg_toplevel, &xdg_toplevel_listener, app);
 	xdg_toplevel_set_title(app->xdg_toplevel, "SHM buffer sample");
 	xdg_toplevel_set_app_id(app->xdg_toplevel, "learnwayland");
-
-	app->wp_viewport = wp_viewporter_get_viewport(app->wp_viewporter, app->wl_surface);
 
 	app->zxdg_toplevel_decoration_v1 =
 			zxdg_decoration_manager_v1_get_toplevel_decoration(
