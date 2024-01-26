@@ -35,11 +35,17 @@ static struct {
 	int height;
 } app;
 
-struct buffer {
+static struct {
 	struct wl_buffer *wl_buffer;
+
 	uint32_t *pixels;
 	int size;
-};
+
+	int width;
+	int height;
+
+	int busy;
+} buffer;
 
 static void noop() {}
 
@@ -76,38 +82,48 @@ static const struct wl_registry_listener registry_listener = {
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
-	struct buffer *buffer = data;
+	assert(buffer.wl_buffer == wl_buffer);
 
-	wl_buffer_destroy(buffer->wl_buffer);
-	munmap(buffer->pixels, buffer->size);
-	free(buffer);
+	buffer.busy = 0;
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
 	.release = wl_buffer_release,
 };
 
-static struct buffer *create_buffer(int width, int height)
+static void buffer_init(int width, int height)
 {
-	int size = width * height * 4;
-	int stride = width * 4;
+	static int fd;
 
-	int fd = memfd_create("buffer-pool", 0);
+	// assert(buffer.busy == 0);
+
+	if (buffer.busy) {
+		fprintf(stderr, "buffer still busy\n");
+		return;
+	}
+
+	if (buffer.wl_buffer)
+		wl_buffer_destroy(buffer.wl_buffer);
+	if (buffer.pixels)
+		munmap(buffer.pixels, buffer.size);
+
+	int stride = width * sizeof(uint32_t);
+	int size = stride * height;
+
+	if (fd == 0)
+		fd = memfd_create("buffer-pool", 0);
 	ftruncate(fd, size);
 
 	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(globals.wl_shm, fd, size);
 
-	struct buffer *buffer = calloc(1, sizeof(*buffer));
-	buffer->size = size;
-	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width,
-					height, stride, WL_SHM_FORMAT_ARGB8888);
-	wl_buffer_add_listener(buffer->wl_buffer, &wl_buffer_listener, buffer);
+	buffer.wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
+	buffer.pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer.width = width;
+	buffer.height = height;
+	buffer.size = size;
 
+	wl_buffer_add_listener(buffer.wl_buffer, &wl_buffer_listener, NULL);
 	wl_shm_pool_destroy(wl_shm_pool);
-	close(fd);
-
-	return buffer;
 }
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
@@ -115,13 +131,16 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 {
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	struct buffer *buffer = create_buffer(app.width, app.height);
+	if (buffer.width != app.width || buffer.height != app.height)
+		buffer_init(app.width, app.height);
 
 	if (app.on_draw)
-		app.on_draw(buffer->pixels, app.width, app.height);
+		app.on_draw(buffer.pixels, buffer.width, buffer.height);
 
-	wl_surface_attach(surface.wl_surface, buffer->wl_buffer, 0, 0);
+	wl_surface_attach(surface.wl_surface, buffer.wl_buffer, 0, 0);
 	wl_surface_commit(surface.wl_surface);
+
+	buffer.busy = 1; // compositor now has it
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
