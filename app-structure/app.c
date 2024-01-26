@@ -29,6 +29,7 @@ static struct {
 static struct {
 	void (*on_close)();
 	void (*on_key)(uint32_t key);
+	void (*on_draw)(uint32_t *pixels, int width, int height);
 
 	int width;
 	int height;
@@ -116,15 +117,8 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 
 	struct buffer *buffer = create_buffer(app.width, app.height);
 
-	for (int y = 0; y < app.height; y++) {
-		for (int x = 0; x < app.width; x++) {
-			uint8_t r = x ^ y;
-			uint8_t g = x ^ y;
-			uint8_t b = x ^ y;
-			uint8_t a = 0x7f;
-			buffer->pixels[y * app.width + x] = (a << 24) + (r << 16) + (g << 8) + b; 
-		}
-	}
+	if (app.on_draw)
+		app.on_draw(buffer->pixels, app.width, app.height);
 
 	wl_surface_attach(surface.wl_surface, buffer->wl_buffer, 0, 0);
 	wl_surface_commit(surface.wl_surface);
@@ -171,12 +165,17 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 	.repeat_info = noop,
 };
 
-void app_init(int width, int height, void (*on_close)(), void (*on_key)(uint32_t key))
+
+void app_init(int width, int height,
+		void (*on_close)(),
+		void (*on_key)(uint32_t key),
+		void (*on_draw)(uint32_t *pixels, int width, int height))
 {
 	app.width = width;
 	app.height = height;
 	app.on_close = on_close;
 	app.on_key = on_key;
+	app.on_draw = on_draw;
 
 	globals.wl_display = wl_display_connect(NULL);
 	globals.wl_registry = wl_display_get_registry(globals.wl_display);
