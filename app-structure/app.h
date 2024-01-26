@@ -7,13 +7,11 @@ struct app_state {
 	struct wl_shm *wl_shm;
 	struct wl_compositor *wl_compositor;
 	struct xdg_wm_base *xdg_wm_base;
-	struct zxdg_decoration_manager_v1 *zxdg_decoration_manager_v1;
 
 	// Surface & roles
 	struct wl_surface *wl_surface;
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
-	struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1;
 
 	// App state
 	int running;

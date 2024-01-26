@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "../protocols/xdg-decoration-unstable-v1.h"
 #include "../protocols/xdg-shell.h"
 
 #include "app.h"
@@ -39,11 +38,6 @@ static void registry_global(void *data, struct wl_registry *registry,
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		app->xdg_wm_base =
 				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
-	}
-
-	else if (strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0) {
-		app->zxdg_decoration_manager_v1 =
-				wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
 	}
 	// clang-format on
 }
@@ -148,8 +142,7 @@ void app_init(struct app_state *app)
 
 	assert(app->wl_shm &&
 			app->wl_compositor &&
-			app->xdg_wm_base &&
-			app->zxdg_decoration_manager_v1);
+			app->xdg_wm_base);
 
 	// Set up surface
 	app->wl_surface = wl_compositor_create_surface(app->wl_compositor);
@@ -161,12 +154,6 @@ void app_init(struct app_state *app)
 	xdg_toplevel_add_listener(app->xdg_toplevel, &xdg_toplevel_listener, app);
 	xdg_toplevel_set_title(app->xdg_toplevel, "SHM buffer sample");
 	xdg_toplevel_set_app_id(app->xdg_toplevel, "learnwayland");
-
-	app->zxdg_toplevel_decoration_v1 =
-			zxdg_decoration_manager_v1_get_toplevel_decoration(
-					app->zxdg_decoration_manager_v1, app->xdg_toplevel);
-	zxdg_toplevel_decoration_v1_set_mode(app->zxdg_toplevel_decoration_v1,
-			ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 
 	wl_surface_commit(app->wl_surface);
 
