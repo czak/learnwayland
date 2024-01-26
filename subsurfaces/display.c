@@ -1,10 +1,8 @@
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-client.h>
-#include <EGL/egl.h>
 
-#include "../protocols/xdg-shell-client-protocol.h"
+#include "../protocols/xdg-shell.h"
 
 #include "display.h"
 
@@ -19,6 +17,10 @@ static void wl_registry_global(void *data, struct wl_registry *registry,
 
 	else if (strcmp(interface, wl_compositor_interface.name) == 0) {
 		d->wl_compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+	}
+
+	else if (strcmp(interface, wl_subcompositor_interface.name) == 0) {
+		d->wl_subcompositor = wl_registry_bind(registry, name, &wl_subcompositor_interface, 1);
 	}
 
 	else if (strcmp(interface, wl_seat_interface.name) == 0) {
@@ -40,29 +42,6 @@ static const struct wl_registry_listener wl_registry_listener = {
 	.global_remove = wl_registry_global_remove,
 };
 
-static void init_egl(struct display* display)
-{
-	EGLint attributes[] = {
-		EGL_RED_SIZE, 8,
-		EGL_GREEN_SIZE, 8,
-		EGL_BLUE_SIZE, 8,
-		EGL_NONE,
-	};
-	int n;
-
-	display->egl_display = eglGetDisplay(display->wl_display);
-	eglInitialize(display->egl_display, NULL, NULL);
-	eglBindAPI(EGL_OPENGL_API);
-	eglChooseConfig(display->egl_display, attributes, &display->egl_config, 1, &n);
-	display->egl_context = eglCreateContext(display->egl_display, display->egl_config, EGL_NO_CONTEXT, NULL);
-}
-
-static void destroy_egl(struct display* display)
-{
-	eglDestroyContext(display->egl_display, display->egl_context);
-	eglTerminate(display->egl_display);
-}
-
 struct display *create_display()
 {
 	struct display *display;
@@ -74,15 +53,11 @@ struct display *create_display()
 	wl_registry_add_listener(display->wl_registry, &wl_registry_listener, display);
 	wl_display_roundtrip(display->wl_display);
 
-	init_egl(display);
-
 	return display;
 }
 
 void destroy_display(struct display* display)
 {
-	destroy_egl(display);
-
 	if (display->xdg_wm_base)
 		xdg_wm_base_destroy(display->xdg_wm_base);
 

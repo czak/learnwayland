@@ -6,10 +6,10 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "protocols/single-pixel-buffer-v1.h"
-#include "protocols/viewporter.h"
-#include "protocols/xdg-decoration-unstable-v1.h"
-#include "protocols/xdg-shell.h"
+#include "../protocols/single-pixel-buffer-v1.h"
+#include "../protocols/viewporter.h"
+#include "../protocols/xdg-decoration-unstable-v1.h"
+#include "../protocols/xdg-shell.h"
 
 struct app_state {
 	// Wayland globals

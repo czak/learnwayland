@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <wayland-client.h>
 
-#include "../protocols/xdg-shell-client-protocol.h"
+#include "../protocols/xdg-shell.h"
 
 #include "display.h"
 #include "window.h"
@@ -98,12 +98,6 @@ struct window *create_window(struct display *display, int width, int height, voi
 	// the client must perform an initial commit without any buffer attached
 	// -- https://wayland.app/protocols/xdg-shell#xdg_surface
 	wl_surface_commit(window->wl_surface);
-
-	window->drawing_wl_surface = wl_compositor_create_surface(display->wl_compositor);
-	window->drawing_wl_subsurface = wl_subcompositor_get_subsurface(display->wl_subcompositor, window->drawing_wl_surface, window->wl_surface);
-	wl_subsurface_set_position(window->drawing_wl_subsurface, 20, 20);
-	wl_surface_attach(window->drawing_wl_surface, window->buffers[0]->wl_buffer, 0, 0);
-	wl_surface_commit(window->drawing_wl_surface);
 
 	// not resizable
 	xdg_toplevel_set_min_size(window->xdg_toplevel, width, height);

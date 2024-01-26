@@ -4,7 +4,7 @@
 #include <wayland-client.h>
 
 #include "../common/shm.h"
-#include "../protocols/xdg-shell-client-protocol.h"
+#include "../protocols/xdg-shell.h"
 
 #include "app.h"
 

@@ -8,18 +8,15 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "protocols/single-pixel-buffer-v1.h"
-#include "protocols/viewporter.h"
-#include "protocols/xdg-decoration-unstable-v1.h"
-#include "protocols/xdg-shell.h"
-
-const int MAX_WIDTH = 1000;
-const int MAX_HEIGHT = 1000;
+#include "../protocols/single-pixel-buffer-v1.h"
+#include "../protocols/viewporter.h"
+#include "../protocols/xdg-decoration-unstable-v1.h"
+#include "../protocols/xdg-shell.h"
 
 struct buffer {
-	int fd;
-	struct wl_shm_pool *wl_shm_pool;
+	struct wl_buffer *wl_buffer;
 	uint32_t *pixels;
+	int size;
 };
 
 struct app_state {
@@ -40,7 +37,6 @@ struct app_state {
 	struct zxdg_toplevel_decoration_v1 *zxdg_toplevel_decoration_v1;
 
 	// Surface content & transform
-	struct buffer buffer;
 	struct wp_viewport *wp_viewport;
 
 	// App state
@@ -97,12 +93,39 @@ static const struct wl_registry_listener registry_listener = {
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
-	wl_buffer_destroy(wl_buffer);
+	struct buffer *buffer = data;
+
+	wl_buffer_destroy(buffer->wl_buffer);
+	munmap(buffer->pixels, buffer->size);
+	free(buffer);
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
 	.release = wl_buffer_release,
 };
+
+struct buffer *create_buffer(struct app_state *app, int width, int height)
+{
+	int size = width * height * 4;
+	int stride = width * 4;
+
+	int fd = memfd_create("buffer-pool", 0);
+	ftruncate(fd, size);
+
+	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(app->wl_shm, fd, size);
+
+	struct buffer *buffer = calloc(1, sizeof(*buffer));
+	buffer->size = size;
+	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width,
+					height, stride, WL_SHM_FORMAT_ARGB8888);
+	wl_buffer_add_listener(buffer->wl_buffer, &wl_buffer_listener, buffer);
+
+	wl_shm_pool_destroy(wl_shm_pool);
+	close(fd);
+
+	return buffer;
+}
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
@@ -111,18 +134,18 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	// Buffer can't exceed MAX_WIDTH * MAX_HEIGHT * 4
-	int buf_width = MIN(app->width, MAX_WIDTH);
-	int buf_height = MIN(app->height, MAX_HEIGHT);
-	struct wl_buffer *wl_buffer =
-			wl_shm_pool_create_buffer(app->buffer.wl_shm_pool, 0, buf_width,
-					buf_height, buf_width * 4, WL_SHM_FORMAT_ARGB8888);
-	wl_buffer_add_listener(wl_buffer, &wl_buffer_listener, NULL);
-	wl_surface_attach(app->wl_surface, wl_buffer, 0, 0);
+	struct buffer *buffer = create_buffer(app, app->width, app->height);
+	for (int y = 0; y < app->height; y++) {
+		for (int x = 0; x < app->width; x++) {
+			uint8_t r = x ^ y;
+			uint8_t g = x ^ y;
+			uint8_t b = x ^ y;
+			uint8_t a = 0x7f;
+			buffer->pixels[y * app->width + x] = (a << 24) + (r << 16) + (g << 8) + b; 
+		}
+	}
 
-	// Anything above is scaled via wp_viewport
-	wp_viewport_set_destination(app->wp_viewport, app->width, app->height);
-
+	wl_surface_attach(app->wl_surface, buffer->wl_buffer, 0, 0);
 	wl_surface_commit(app->wl_surface);
 }
 
@@ -190,29 +213,6 @@ void app_init(struct app_state *app)
 	wl_surface_commit(app->wl_surface);
 }
 
-void buffer_init(struct app_state *app, struct buffer *buffer)
-{
-	const size_t mem_size = MAX_WIDTH * MAX_HEIGHT * 4;
-
-	int fd = memfd_create("buffer-pool", 0);
-	ftruncate(fd, mem_size);
-
-	buffer->wl_shm_pool = wl_shm_create_pool(app->wl_shm, fd, mem_size);
-	buffer->pixels = mmap(NULL, mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-
-	for (int y = 0; y < MAX_HEIGHT; y++) {
-		for (int x = 0; x < MAX_WIDTH; x++) {
-			uint8_t r = x ^ y;
-			uint8_t g = x ^ y;
-			uint8_t b = x ^ y;
-			uint8_t a = 0x7f;
-			buffer->pixels[y * MAX_WIDTH + x] = (a << 24) + (r << 16) + (g << 8) + b; 
-		}
-	}
-
-	close(fd);
-}
-
 int main(int argc, char *argv[])
 {
 	struct app_state app = {
@@ -222,7 +222,6 @@ int main(int argc, char *argv[])
 	};
 
 	app_init(&app);
-	buffer_init(&app, &app.buffer);
 
 	// Main loop
 	while (wl_display_dispatch(app.wl_display) != -1 && app.running) {

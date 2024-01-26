@@ -2,7 +2,7 @@
 #include <string.h>
 #include <wayland-client.h>
 
-#include "../protocols/xdg-shell-client-protocol.h"
+#include "../protocols/xdg-shell.h"
 
 #include "display.h"
 

@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <cairo.h>
+#include <pixman.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,14 +9,15 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "protocols/single-pixel-buffer-v1.h"
-#include "protocols/viewporter.h"
-#include "protocols/xdg-decoration-unstable-v1.h"
-#include "protocols/xdg-shell.h"
+#include "../protocols/single-pixel-buffer-v1.h"
+#include "../protocols/viewporter.h"
+#include "../protocols/xdg-decoration-unstable-v1.h"
+#include "../protocols/xdg-shell.h"
 
 struct buffer {
 	struct wl_buffer *wl_buffer;
 	uint32_t *pixels;
+	pixman_image_t *pixman_image;
 	int size;
 };
 
@@ -97,6 +98,7 @@ static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 	struct buffer *buffer = data;
 
 	wl_buffer_destroy(buffer->wl_buffer);
+	pixman_image_unref(buffer->pixman_image);
 	munmap(buffer->pixels, buffer->size);
 	free(buffer);
 }
@@ -118,6 +120,8 @@ struct buffer *create_buffer(struct app_state *app, int width, int height)
 	struct buffer *buffer = calloc(1, sizeof(*buffer));
 	buffer->size = size;
 	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer->pixman_image = pixman_image_create_bits_no_clear(PIXMAN_a8r8g8b8,
+			width, height, buffer->pixels, stride);
 	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height,
 			stride, WL_SHM_FORMAT_ARGB8888);
 	wl_buffer_add_listener(buffer->wl_buffer, &wl_buffer_listener, buffer);
@@ -143,46 +147,35 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 			uint8_t r = x ^ y;
 			uint8_t g = x ^ y;
 			uint8_t b = x ^ y;
-			uint8_t a = 0xff;
+			uint8_t a = 0x7f;
 			buffer->pixels[y * app->width + x] = (a << 24) + (r << 16) +
 												 (g << 8) + b;
 		}
 	}
 
-	cairo_surface_t *surface = cairo_image_surface_create_for_data(
-			(uint8_t *) buffer->pixels, CAIRO_FORMAT_ARGB32, app->width, app->height,
-			app->width * 4);
-	cairo_t *cr = cairo_create(surface);
+	// Left half solid fill
+	pixman_image_t *fill_img = pixman_image_create_solid_fill(
+			&((pixman_color_t){
+				.red = random() & 0x7fff,
+				.green = random() & 0x7fff,
+				.blue = random() & 0x7fff,
+				.alpha = 0xffff,
+			}));
+	pixman_image_composite(PIXMAN_OP_COLOR_BURN, fill_img, NULL, buffer->pixman_image,
+			0, 0, 0, 0, 0, 0, app->width / 2, app->height);
+	pixman_image_unref(fill_img);
 
-	cairo_save(cr);
-	cairo_translate(cr, app->width / 2., app->height / 2.);
-	cairo_scale(cr, app->width / 2., app->height / 2.);
-	cairo_arc(cr, 0., 0., 1., 0., 2 * M_PI);
-	cairo_restore(cr);
-
-	// Fill with red
-	cairo_set_source_rgba(cr, 1, 0, 0, 0.80);
-	cairo_fill_preserve(cr); // cairo_fill would clear the current path
-
-	// Stroke with blue
-	cairo_set_line_width(cr, 8);
-	cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND); 
-	cairo_set_dash(cr, (double[]) {50, 50}, 2, 0);
-	cairo_set_source_rgba(cr, 0, 0, 1, 0.80);
-	cairo_stroke(cr);
-
-	// Show text
-	const char *text = "Hello";
-	cairo_set_source_rgba(cr, 1, 1, 1, 1);
-	cairo_select_font_face(cr, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
-	cairo_set_font_size(cr, 40);
-	cairo_text_extents_t ext;
-	cairo_text_extents(cr, text, &ext);
-	cairo_move_to(cr, (app->width - ext.width) / 2., (app->height + ext.height) / 2.);
-	cairo_show_text(cr, text);
-
-	cairo_surface_destroy(surface);
-	cairo_destroy(cr);
+	// Right half gradient	
+	pixman_point_fixed_t p1 = { 0, 0 };
+	pixman_point_fixed_t p2 = { pixman_int_to_fixed(app->width / 2), pixman_int_to_fixed(app->height) };
+	pixman_gradient_stop_t stops[] = {
+		{ .x = pixman_int_to_fixed(0), .color = { 0xffff, 0x0000, 0xffff, 0xffff } },
+		{ .x = pixman_int_to_fixed(1), .color = { 0x0000, 0xffff, 0xffff, 0xffff } },
+	};
+	pixman_image_t *gradient_img = pixman_image_create_linear_gradient(&p1, &p2, stops, 2);
+	pixman_image_composite(PIXMAN_OP_SATURATE, gradient_img, NULL, buffer->pixman_image,
+			0, 0, 0, 0, app->width / 2, 0, app->width / 2, app->height);
+	pixman_image_unref(gradient_img);
 
 	wl_surface_attach(app->wl_surface, buffer->wl_buffer, 0, 0);
 	wl_surface_commit(app->wl_surface);
@@ -236,7 +229,7 @@ void app_init(struct app_state *app)
 
 	app->xdg_toplevel = xdg_surface_get_toplevel(app->xdg_surface);
 	xdg_toplevel_add_listener(app->xdg_toplevel, &xdg_toplevel_listener, app);
-	xdg_toplevel_set_title(app->xdg_toplevel, "Cairo sample");
+	xdg_toplevel_set_title(app->xdg_toplevel, "SHM buffer sample");
 	xdg_toplevel_set_app_id(app->xdg_toplevel, "learnwayland");
 
 	app->wp_viewport = wp_viewporter_get_viewport(app->wp_viewporter,

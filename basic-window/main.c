@@ -5,7 +5,7 @@
 #include <wayland-client.h>
 
 #include "../common/shm.h"
-#include "../protocols/xdg-shell-client-protocol.h"
+#include "../protocols/xdg-shell.h"
 
 struct app_state {
 	struct wl_surface *surface;
