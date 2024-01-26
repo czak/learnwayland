@@ -165,7 +165,6 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 	.repeat_info = noop,
 };
 
-
 void app_init(int width, int height,
 		void (*on_close)(),
 		void (*on_key)(uint32_t key),
