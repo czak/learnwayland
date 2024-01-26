@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "../protocols/single-pixel-buffer-v1.h"
 #include "../protocols/xdg-decoration-unstable-v1.h"
 #include "../protocols/xdg-shell.h"
 
@@ -40,11 +39,6 @@ static void registry_global(void *data, struct wl_registry *registry,
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		app->xdg_wm_base =
 				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
-	}
-
-	else if (strcmp(interface, wp_single_pixel_buffer_manager_v1_interface.name) == 0) {
-		app->wp_single_pixel_buffer_manager_v1 =
-				wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
 	}
 
 	else if (strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0) {
@@ -155,7 +149,6 @@ void app_init(struct app_state *app)
 	assert(app->wl_shm &&
 			app->wl_compositor &&
 			app->xdg_wm_base &&
-			app->wp_single_pixel_buffer_manager_v1 &&
 			app->zxdg_decoration_manager_v1);
 
 	// Set up surface
