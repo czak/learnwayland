@@ -35,6 +35,11 @@ static void registry_global(void *data, struct wl_registry *registry,
 				wl_registry_bind(registry, name, &wl_compositor_interface, 4);
 	}
 
+	else if (strcmp(interface, wl_seat_interface.name) == 0) {
+		app->wl_seat =
+				wl_registry_bind(registry, name, &wl_seat_interface, 8);
+	}
+
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		app->xdg_wm_base =
 				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
@@ -133,6 +138,21 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 	.wm_capabilities = noop,
 };
 
+static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
+		uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
+{
+	fprintf(stderr, "key %d\n", key);
+}
+
+static const struct wl_keyboard_listener wl_keyboard_listener = {
+	.keymap = noop,
+	.enter = noop,
+	.leave = noop,
+	.key = wl_keyboard_key,
+	.modifiers = noop,
+	.repeat_info = noop,
+};
+
 void app_init(struct app_state *app)
 {
 	app->wl_display = wl_display_connect(NULL);
@@ -142,6 +162,7 @@ void app_init(struct app_state *app)
 
 	assert(app->wl_shm &&
 			app->wl_compositor &&
+			app->wl_seat &&
 			app->xdg_wm_base);
 
 	// Set up surface
@@ -156,6 +177,10 @@ void app_init(struct app_state *app)
 	xdg_toplevel_set_app_id(app->xdg_toplevel, "learnwayland");
 
 	wl_surface_commit(app->wl_surface);
+
+	// Set up input
+	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(app->wl_seat);
+	wl_keyboard_add_listener(wl_keyboard, &wl_keyboard_listener, app);
 
 	app->running = 1;
 }

@@ -6,6 +6,7 @@ struct app_state {
 	struct wl_registry *wl_registry;
 	struct wl_shm *wl_shm;
 	struct wl_compositor *wl_compositor;
+	struct wl_seat *wl_seat;
 	struct xdg_wm_base *xdg_wm_base;
 
 	// Surface & roles
@@ -19,7 +20,6 @@ struct app_state {
 	int width;
 	int height;
 };
-
 
 void app_init(struct app_state *app);
 int app_run(struct app_state *app);
