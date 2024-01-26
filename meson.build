@@ -19,6 +19,7 @@ protocols = declare_dependency(
 )
 
 subdir('animation')
+subdir('app-structure')
 subdir('basic-window')
 subdir('cairo')
 subdir('gl')
