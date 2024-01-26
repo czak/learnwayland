@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 struct app_state {
 	// Wayland globals
 	struct wl_display *wl_display;
@@ -13,6 +15,10 @@ struct app_state {
 	struct wl_surface *wl_surface;
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
+
+	// Callbacks
+	void (*on_close)(struct app_state *app);
+	void (*on_key)(struct app_state *app, uint32_t key);
 
 	// App state
 	int running;

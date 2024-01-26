@@ -128,7 +128,8 @@ static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
 {
 	struct app_state *app = data;
 
-	app->running = 0;
+	if (app->on_close)
+		app->on_close(app);
 }
 
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
@@ -141,7 +142,10 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
 		uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
-	fprintf(stderr, "key %d\n", key);
+	struct app_state *app = data;
+
+	if (app->on_key)
+		app->on_key(app, key);
 }
 
 static const struct wl_keyboard_listener wl_keyboard_listener = {
