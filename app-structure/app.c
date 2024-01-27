@@ -82,6 +82,7 @@ static const struct wl_registry_listener registry_listener = {
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
+	// Make sure compositor is releasing the one buffer we're holding
 	assert(buffer.wl_buffer == wl_buffer);
 
 	buffer.busy = 0;
