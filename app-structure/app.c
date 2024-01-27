@@ -182,7 +182,6 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 
 static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
-
 	if (buffer.width != app.width || buffer.height != app.height)
 		buffer_init(app.width, app.height);
 
