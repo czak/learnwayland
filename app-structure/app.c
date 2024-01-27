@@ -192,6 +192,8 @@ static const struct wl_callback_listener frame_listener = {
 };
 
 void app_init(int width, int height,
+		const char *title,
+		const char *app_id,
 		void (*on_close)(),
 		void (*on_key)(uint32_t key),
 		void (*on_draw)(uint32_t *pixels, int width, int height))
@@ -217,8 +219,8 @@ void app_init(int width, int height,
 
 	surface.xdg_toplevel = xdg_surface_get_toplevel(surface.xdg_surface);
 	xdg_toplevel_add_listener(surface.xdg_toplevel, &xdg_toplevel_listener, NULL);
-	xdg_toplevel_set_title(surface.xdg_toplevel, "SHM buffer sample");
-	xdg_toplevel_set_app_id(surface.xdg_toplevel, "learnwayland");
+	xdg_toplevel_set_title(surface.xdg_toplevel, title);
+	xdg_toplevel_set_app_id(surface.xdg_toplevel, app_id);
 
 	wl_surface_commit(surface.wl_surface);
 
