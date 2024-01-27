@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/param.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 #include <wayland-client.h>
 
@@ -28,12 +29,13 @@ static struct {
 } surface;
 
 static struct {
-	void (*on_close)();
 	void (*on_key)(uint32_t key);
 	void (*on_draw)(uint32_t *pixels, int width, int height);
 
 	int width;
 	int height;
+
+	int running;
 } app;
 
 static struct {
@@ -47,6 +49,12 @@ static struct {
 
 	int busy;
 } buffer;
+
+static struct {
+	int fd;
+
+	void (*on_timer)();
+} timer;
 
 static void noop() {}
 
@@ -161,8 +169,7 @@ static void xdg_toplevel_configure(void *data,
 
 static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
 {
-	if (app.on_close)
-		app.on_close();
+	app_stop();
 }
 
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
@@ -175,6 +182,8 @@ static const struct xdg_toplevel_listener xdg_toplevel_listener = {
 static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
 		uint32_t serial, uint32_t time, uint32_t key, uint32_t state)
 {
+	if (state != WL_KEYBOARD_KEY_STATE_PRESSED) return;
+
 	if (app.on_key)
 		app.on_key(key);
 }
@@ -195,15 +204,14 @@ static const struct wl_callback_listener frame_listener = {
 void app_init(int width, int height,
 		const char *title,
 		const char *app_id,
-		void (*on_close)(),
 		void (*on_key)(uint32_t key),
 		void (*on_draw)(uint32_t *pixels, int width, int height))
 {
 	app.width = width;
 	app.height = height;
-	app.on_close = on_close;
 	app.on_key = on_key;
 	app.on_draw = on_draw;
+	app.running = 1;
 
 	globals.wl_display = wl_display_connect(NULL);
 	globals.wl_registry = wl_display_get_registry(globals.wl_display);
@@ -228,12 +236,16 @@ void app_init(int width, int height,
 	// Set up input
 	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(globals.wl_seat);
 	wl_keyboard_add_listener(wl_keyboard, &wl_keyboard_listener, NULL);
+
+	// Set up timer
+	timer.fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 }
 
 void app_run()
 {
 	enum {
 		WAYLAND,
+		TIMER,
 	};
 
 	struct pollfd pollfds[] = {
@@ -241,14 +253,28 @@ void app_run()
 			.fd = wl_display_get_fd(globals.wl_display),
 			.events = POLLIN,
 		},
+		[TIMER] = {
+			.fd = timer.fd,
+			.events = POLLIN,
+		},
 	};
 
-	wl_display_flush(globals.wl_display);
+	while (app.running) {
+		wl_display_flush(globals.wl_display);
 
-	poll(pollfds, sizeof(pollfds) / sizeof(pollfds[0]), -1);
+		poll(pollfds, sizeof(pollfds) / sizeof(pollfds[0]), -1);
 
-	if (pollfds[WAYLAND].revents & POLLIN)
-		wl_display_dispatch(globals.wl_display);
+		if (pollfds[WAYLAND].revents & POLLIN)
+			wl_display_dispatch(globals.wl_display);
+
+		if (pollfds[TIMER].revents & POLLIN) {
+			uint64_t expirations;
+			read(pollfds[TIMER].fd, &expirations, sizeof(expirations));
+
+			if (timer.on_timer)
+				timer.on_timer();
+		}
+	}
 }
 
 void app_redraw()
@@ -256,4 +282,20 @@ void app_redraw()
 	struct wl_callback *frame_callback = wl_surface_frame(surface.wl_surface);
 	wl_callback_add_listener(frame_callback, &frame_listener, NULL);
 	wl_surface_commit(surface.wl_surface);
+}
+
+void app_stop()
+{
+	app.running = 0;
+}
+
+void app_set_timer(int interval, void (*on_timer)())
+{
+	timer.on_timer = on_timer;
+
+    struct itimerspec ts = {
+        .it_interval = { .tv_sec = interval, .tv_nsec = 0 },
+        .it_value    = { .tv_sec = interval, .tv_nsec = 0 },
+    };
+    timerfd_settime(timer.fd, 0, &ts, NULL);
 }
