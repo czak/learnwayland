@@ -12,6 +12,7 @@
 #include "../protocols/xdg-shell.h"
 
 #include "app.h"
+#include "log.h"
 
 static struct {
 	struct wl_display *wl_display;
@@ -139,7 +140,11 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
 	struct buffer *buffer = get_buffer(app.width, app.height);
 
-	if (!buffer) return; // all buffers busy
+	if (!buffer) {
+		LOG("All buffers busy");
+
+		return;
+	}
 
 	if (app.on_draw)
 		app.on_draw(buffer->pixels, buffer->width, buffer->height);
@@ -235,6 +240,8 @@ void app_init(int width, int height,
 	xdg_toplevel_add_listener(surface.xdg_toplevel, &xdg_toplevel_listener, NULL);
 	xdg_toplevel_set_title(surface.xdg_toplevel, title);
 	xdg_toplevel_set_app_id(surface.xdg_toplevel, app_id);
+
+	assert(surface.wl_surface && surface.xdg_surface && surface.xdg_toplevel);
 
 	wl_surface_commit(surface.wl_surface);
 
