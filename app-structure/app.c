@@ -95,13 +95,6 @@ static void buffer_init(int width, int height)
 {
 	static int fd;
 
-	// assert(buffer.busy == 0);
-
-	if (buffer.busy) {
-		fprintf(stderr, "buffer still busy\n");
-		return;
-	}
-
 	if (buffer.wl_buffer)
 		wl_buffer_destroy(buffer.wl_buffer);
 	if (buffer.pixels)
@@ -129,6 +122,8 @@ static void buffer_init(int width, int height)
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
+	if (buffer.busy) return;
+
 	xdg_surface_ack_configure(xdg_surface, serial);
 
 	if (buffer.width != app.width || buffer.height != app.height)
