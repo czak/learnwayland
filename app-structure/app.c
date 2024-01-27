@@ -180,6 +180,27 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 	.repeat_info = noop,
 };
 
+static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
+{
+
+	if (buffer.width != app.width || buffer.height != app.height)
+		buffer_init(app.width, app.height);
+
+	if (app.on_draw)
+		app.on_draw(buffer.pixels, buffer.width, buffer.height);
+
+	wl_surface_attach(surface.wl_surface, buffer.wl_buffer, 0, 0);
+	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer.width,
+			buffer.height);
+	wl_surface_commit(surface.wl_surface);
+
+	buffer.busy = 1;
+}
+
+static const struct wl_callback_listener frame_listener = {
+	.done = frame,
+};
+
 void app_init(int width, int height,
 		void (*on_close)(),
 		void (*on_key)(uint32_t key),
@@ -219,4 +240,11 @@ void app_init(int width, int height,
 int app_run()
 {
 	return wl_display_dispatch(globals.wl_display) != -1;
+}
+
+void app_redraw()
+{
+	struct wl_callback *frame_callback = wl_surface_frame(surface.wl_surface);
+	wl_callback_add_listener(frame_callback, &frame_listener, NULL);
+	wl_surface_commit(surface.wl_surface);
 }
