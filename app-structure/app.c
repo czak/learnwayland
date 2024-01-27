@@ -38,7 +38,14 @@ static struct {
 	int running;
 } app;
 
+static struct {
+	int fd;
+
+	void (*on_timer)();
+} timer;
+
 static struct buffer {
+	int fd;
 	struct wl_buffer *wl_buffer;
 
 	uint32_t *pixels;
@@ -48,13 +55,7 @@ static struct buffer {
 	int height;
 
 	int busy;
-} buffers[1];
-
-static struct {
-	int fd;
-
-	void (*on_timer)();
-} timer;
+} buffers[2];
 
 static void noop() {}
 
@@ -103,29 +104,27 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 static struct buffer *get_buffer(int width, int height)
 {
 	struct buffer *buffer = &buffers[0];
-
+	if (buffer->busy) buffer = &buffers[1];
 	if (buffer->busy) return NULL;
 
 	// Reuse existing buffer if compatible
 	if (buffer->width == width && buffer->height == height)
 		return buffer;
 
-	// Reallocate
 	if (buffer->wl_buffer) wl_buffer_destroy(buffer->wl_buffer);
 	if (buffer->pixels) munmap(buffer->pixels, buffer->size);
 
 	int stride = width * sizeof(uint32_t);
 	int size = stride * height;
 
-	static int fd;
-	if (fd == 0)
-		fd = memfd_create("buffer-pool", 0);
-	ftruncate(fd, size);
+	if (buffer->fd == 0)
+		buffer->fd = memfd_create("buffer-pool", 0);
+	ftruncate(buffer->fd, size);
 
-	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(globals.wl_shm, fd, size);
+	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(globals.wl_shm, buffer->fd, size);
 
 	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, buffer->fd, 0);
 	buffer->width = width;
 	buffer->height = height;
 	buffer->size = size;
@@ -140,7 +139,7 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
 	struct buffer *buffer = get_buffer(app.width, app.height);
 
-	if (!buffer) return;
+	if (!buffer) return; // all buffers busy
 
 	if (app.on_draw)
 		app.on_draw(buffer->pixels, buffer->width, buffer->height);
