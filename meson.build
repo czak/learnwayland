@@ -2,11 +2,16 @@ project('learnwayland', 'c')
 
 add_project_arguments('-D_GNU_SOURCE', language: ['c'])
 
+if get_option('buildtype').startswith('debug')
+  add_project_arguments('-D_LOG_ENABLE', language: 'c')
+endif
+
 wayland_client = dependency('wayland-client')
 wayland_egl = dependency('wayland-egl')
 
 common = declare_dependency(
-  sources: ['common/shm.c'],
+  sources: ['common/shm.c', 'common/log.c'],
+  include_directories: ['common'],
 )
 
 protocols = declare_dependency(
