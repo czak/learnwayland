@@ -10,6 +10,7 @@
 #include <wayland-client.h>
 
 #include "../protocols/xdg-shell.h"
+#include "../protocols/single-pixel-buffer-v1.h"
 
 #include "app.h"
 #include "log.h"
@@ -19,8 +20,10 @@ static struct {
 	struct wl_registry *wl_registry;
 	struct wl_shm *wl_shm;
 	struct wl_compositor *wl_compositor;
+	struct wl_subcompositor *wl_subcompositor;
 	struct wl_seat *wl_seat;
 	struct xdg_wm_base *xdg_wm_base;
+	struct wp_single_pixel_buffer_manager_v1 *wp_single_pixel_buffer_manager_v1;
 } globals;
 
 static struct {
@@ -74,6 +77,11 @@ static void registry_global(void *data, struct wl_registry *registry,
 				wl_registry_bind(registry, name, &wl_compositor_interface, 4);
 	}
 
+	else if (strcmp(interface, wl_subcompositor_interface.name) == 0) {
+		globals.wl_subcompositor =
+				wl_registry_bind(registry, name, &wl_subcompositor_interface, 1);
+	}
+
 	else if (strcmp(interface, wl_seat_interface.name) == 0) {
 		globals.wl_seat =
 				wl_registry_bind(registry, name, &wl_seat_interface, 8);
@@ -82,6 +90,12 @@ static void registry_global(void *data, struct wl_registry *registry,
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
 		globals.xdg_wm_base =
 				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+
+	}
+
+	else if (strcmp(interface, wp_single_pixel_buffer_manager_v1_interface.name) == 0) {
+		globals.wp_single_pixel_buffer_manager_v1 =
+				wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
 	}
 	// clang-format on
 }
@@ -228,7 +242,9 @@ void app_init(int width, int height,
 	wl_registry_add_listener(globals.wl_registry, &registry_listener, NULL);
 	wl_display_roundtrip(globals.wl_display);
 
-	assert(globals.wl_shm && globals.wl_compositor && globals.wl_seat && globals.xdg_wm_base);
+	assert(globals.wl_shm && globals.wl_compositor &&
+			globals.wl_subcompositor && globals.wl_seat &&
+			globals.xdg_wm_base && globals.wp_single_pixel_buffer_manager_v1);
 
 	// Set up surface
 	surface.wl_surface = wl_compositor_create_surface(globals.wl_compositor);

@@ -32,7 +32,7 @@ static void on_draw(uint32_t *pixels, int width, int height)
 
 int main(int argc, char *argv[])
 {
-	app_init(256, 256, "App demo", "learnwayland", on_key, on_draw);
+	app_init(256, 256, "Subsurfaces demo", "learnwayland", on_key, on_draw);
 
 	app_run();
 
