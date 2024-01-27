@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -229,9 +230,25 @@ void app_init(int width, int height,
 	wl_keyboard_add_listener(wl_keyboard, &wl_keyboard_listener, NULL);
 }
 
-int app_run()
+void app_run()
 {
-	return wl_display_dispatch(globals.wl_display) != -1;
+	enum {
+		WAYLAND,
+	};
+
+	struct pollfd pollfds[] = {
+		[WAYLAND] = {
+			.fd = wl_display_get_fd(globals.wl_display),
+			.events = POLLIN,
+		},
+	};
+
+	wl_display_flush(globals.wl_display);
+
+	poll(pollfds, sizeof(pollfds) / sizeof(pollfds[0]), -1);
+
+	if (pollfds[WAYLAND].revents & POLLIN)
+		wl_display_dispatch(globals.wl_display);
 }
 
 void app_redraw()
