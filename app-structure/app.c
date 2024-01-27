@@ -120,13 +120,8 @@ static void buffer_init(int width, int height)
 	wl_shm_pool_destroy(wl_shm_pool);
 }
 
-static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
-		uint32_t serial)
+static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
-	if (buffer.busy) return;
-
-	xdg_surface_ack_configure(xdg_surface, serial);
-
 	if (buffer.width != app.width || buffer.height != app.height)
 		buffer_init(app.width, app.height);
 
@@ -134,9 +129,21 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		app.on_draw(buffer.pixels, buffer.width, buffer.height);
 
 	wl_surface_attach(surface.wl_surface, buffer.wl_buffer, 0, 0);
+	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer.width,
+			buffer.height);
 	wl_surface_commit(surface.wl_surface);
 
-	buffer.busy = 1; // compositor now has it
+	buffer.busy = 1;
+}
+
+static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
+		uint32_t serial)
+{
+	if (buffer.busy) return;
+
+	xdg_surface_ack_configure(xdg_surface, serial);
+
+	frame(NULL, NULL, 0);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -179,22 +186,6 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 	.modifiers = noop,
 	.repeat_info = noop,
 };
-
-static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
-{
-	if (buffer.width != app.width || buffer.height != app.height)
-		buffer_init(app.width, app.height);
-
-	if (app.on_draw)
-		app.on_draw(buffer.pixels, buffer.width, buffer.height);
-
-	wl_surface_attach(surface.wl_surface, buffer.wl_buffer, 0, 0);
-	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer.width,
-			buffer.height);
-	wl_surface_commit(surface.wl_surface);
-
-	buffer.busy = 1;
-}
 
 static const struct wl_callback_listener frame_listener = {
 	.done = frame,
