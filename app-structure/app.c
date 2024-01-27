@@ -38,7 +38,7 @@ static struct {
 	int running;
 } app;
 
-static struct {
+static struct buffer {
 	struct wl_buffer *wl_buffer;
 
 	uint32_t *pixels;
@@ -48,7 +48,7 @@ static struct {
 	int height;
 
 	int busy;
-} buffer;
+} buffers[1];
 
 static struct {
 	int fd;
@@ -91,65 +91,71 @@ static const struct wl_registry_listener registry_listener = {
 
 static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
-	// Make sure compositor is releasing the one buffer we're holding
-	assert(buffer.wl_buffer == wl_buffer);
+	struct buffer *buffer = data;
 
-	buffer.busy = 0;
+	buffer->busy = 0;
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
 	.release = wl_buffer_release,
 };
 
-static void buffer_init(int width, int height)
+static struct buffer *get_buffer(int width, int height)
 {
-	static int fd;
+	struct buffer *buffer = &buffers[0];
 
-	if (buffer.wl_buffer)
-		wl_buffer_destroy(buffer.wl_buffer);
-	if (buffer.pixels)
-		munmap(buffer.pixels, buffer.size);
+	if (buffer->busy) return NULL;
+
+	// Reuse existing buffer if compatible
+	if (buffer->width == width && buffer->height == height)
+		return buffer;
+
+	// Reallocate
+	if (buffer->wl_buffer) wl_buffer_destroy(buffer->wl_buffer);
+	if (buffer->pixels) munmap(buffer->pixels, buffer->size);
 
 	int stride = width * sizeof(uint32_t);
 	int size = stride * height;
 
+	static int fd;
 	if (fd == 0)
 		fd = memfd_create("buffer-pool", 0);
 	ftruncate(fd, size);
 
 	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(globals.wl_shm, fd, size);
 
-	buffer.wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-	buffer.pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	buffer.width = width;
-	buffer.height = height;
-	buffer.size = size;
+	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
+	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	buffer->width = width;
+	buffer->height = height;
+	buffer->size = size;
 
-	wl_buffer_add_listener(buffer.wl_buffer, &wl_buffer_listener, NULL);
+	wl_buffer_add_listener(buffer->wl_buffer, &wl_buffer_listener, buffer);
 	wl_shm_pool_destroy(wl_shm_pool);
+
+	return buffer;
 }
 
 static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 {
-	if (buffer.width != app.width || buffer.height != app.height)
-		buffer_init(app.width, app.height);
+	struct buffer *buffer = get_buffer(app.width, app.height);
+
+	if (!buffer) return;
 
 	if (app.on_draw)
-		app.on_draw(buffer.pixels, buffer.width, buffer.height);
+		app.on_draw(buffer->pixels, buffer->width, buffer->height);
 
-	wl_surface_attach(surface.wl_surface, buffer.wl_buffer, 0, 0);
-	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer.width,
-			buffer.height);
+	wl_surface_attach(surface.wl_surface, buffer->wl_buffer, 0, 0);
+	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer->width,
+			buffer->height);
 	wl_surface_commit(surface.wl_surface);
 
-	buffer.busy = 1;
+	buffer->busy = 1;
 }
 
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
-	if (buffer.busy) return;
-
 	xdg_surface_ack_configure(xdg_surface, serial);
 
 	frame(NULL, NULL, 0);
