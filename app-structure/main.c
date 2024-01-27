@@ -1,5 +1,4 @@
 #include "app.h"
-#include <stdio.h>
 
 static int offset = 0;
 
@@ -11,11 +10,10 @@ static void on_timer()
 
 static void on_key(uint32_t key)
 {
-	if (key == 1) app_stop();
+	if (key == 1)
+		app_stop();
 	else if (key < 10) {
-		int n = key - 1;
-		fprintf(stderr, "Setting timer every %d seconds.\n", n);
-		app_set_timer(n, on_timer);
+		app_set_timer(key - 1, on_timer);
 	}
 }
 
@@ -35,8 +33,6 @@ static void on_draw(uint32_t *pixels, int width, int height)
 int main(int argc, char *argv[])
 {
 	app_init(256, 256, "App demo", "learnwayland", on_key, on_draw);
-
-	app_set_timer(3, on_timer);
 
 	app_run();
 
