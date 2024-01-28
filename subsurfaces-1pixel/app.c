@@ -9,8 +9,9 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "../protocols/xdg-shell.h"
 #include "../protocols/single-pixel-buffer-v1.h"
+#include "../protocols/viewporter.h"
+#include "../protocols/xdg-shell.h"
 
 #include "app.h"
 #include "log.h"
@@ -24,13 +25,21 @@ static struct {
 	struct wl_seat *wl_seat;
 	struct xdg_wm_base *xdg_wm_base;
 	struct wp_single_pixel_buffer_manager_v1 *wp_single_pixel_buffer_manager_v1;
+	struct wp_viewporter *wp_viewporter;
 } globals;
 
 static struct {
 	struct wl_surface *wl_surface;
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
-} surface;
+	struct wp_viewport *wp_viewport;
+} bg;
+
+static struct {
+	struct wl_surface *wl_surface;
+	struct wl_subsurface *wl_subsurface;
+	struct wp_viewport *wp_viewport;
+} fg;
 
 static struct {
 	void (*on_key)(uint32_t key);
@@ -60,6 +69,10 @@ static struct buffer {
 
 	int busy;
 } buffers[2];
+
+static struct {
+	struct wl_buffer *wl_buffer;
+} fill_buffer;
 
 static void noop() {}
 
@@ -96,6 +109,11 @@ static void registry_global(void *data, struct wl_registry *registry,
 	else if (strcmp(interface, wp_single_pixel_buffer_manager_v1_interface.name) == 0) {
 		globals.wp_single_pixel_buffer_manager_v1 =
 				wl_registry_bind(registry, name, &wp_single_pixel_buffer_manager_v1_interface, 1);
+	}
+
+	else if (strcmp(interface, wp_viewporter_interface.name) == 0) {
+		globals.wp_viewporter =
+				wl_registry_bind(registry, name, &wp_viewporter_interface, 1);
 	}
 	// clang-format on
 }
@@ -163,10 +181,10 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 	if (app.on_draw)
 		app.on_draw(buffer->pixels, buffer->width, buffer->height);
 
-	wl_surface_attach(surface.wl_surface, buffer->wl_buffer, 0, 0);
-	wl_surface_damage_buffer(surface.wl_surface, 0, 0, buffer->width,
+	wl_surface_attach(bg.wl_surface, buffer->wl_buffer, 0, 0);
+	wl_surface_damage_buffer(bg.wl_surface, 0, 0, buffer->width,
 			buffer->height);
-	wl_surface_commit(surface.wl_surface);
+	wl_surface_commit(bg.wl_surface);
 
 	buffer->busy = 1;
 }
@@ -176,7 +194,17 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 {
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	frame(NULL, NULL, 0);
+	// Foreground
+	struct buffer *buffer = get_buffer(100, 100);
+	memset(buffer->pixels, 0xff, 100 * 100 * 4);
+	wl_surface_attach(fg.wl_surface, buffer->wl_buffer, 0, 0);
+	wl_subsurface_set_position(fg.wl_subsurface, app.width / 2, app.height / 2);
+	wl_surface_commit(fg.wl_surface);
+
+	// Background
+	wl_surface_attach(bg.wl_surface, fill_buffer.wl_buffer, 0, 0);
+	wp_viewport_set_destination(bg.wp_viewport, app.width, app.height);
+	wl_surface_commit(bg.wl_surface);
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -225,6 +253,36 @@ static const struct wl_callback_listener frame_listener = {
 	.done = frame,
 };
 
+static void init_bg(const char *title, const char *app_id)
+{
+	bg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
+
+	bg.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, bg.wl_surface);
+	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
+
+	bg.xdg_toplevel = xdg_surface_get_toplevel(bg.xdg_surface);
+	xdg_toplevel_add_listener(bg.xdg_toplevel, &xdg_toplevel_listener, NULL);
+	xdg_toplevel_set_title(bg.xdg_toplevel, title);
+	xdg_toplevel_set_app_id(bg.xdg_toplevel, app_id);
+
+	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
+
+	wl_surface_commit(bg.wl_surface);
+}
+
+static void init_fg()
+{
+	fg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
+	fg.wl_subsurface = wl_subcompositor_get_subsurface(globals.wl_subcompositor,
+			fg.wl_surface, bg.wl_surface);
+	// wl_subsurface_set_position(fg.wl_subsurface, 20, 20);
+
+	fg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, fg.wl_surface);
+	// wp_viewport_set_destination(fg.wp_viewport, 20, 20);
+
+	wl_surface_commit(fg.wl_surface);
+}
+
 void app_init(int width, int height,
 		const char *title,
 		const char *app_id,
@@ -244,22 +302,17 @@ void app_init(int width, int height,
 
 	assert(globals.wl_shm && globals.wl_compositor &&
 			globals.wl_subcompositor && globals.wl_seat &&
-			globals.xdg_wm_base && globals.wp_single_pixel_buffer_manager_v1);
+			globals.xdg_wm_base && globals.wp_single_pixel_buffer_manager_v1 &&
+			globals.wp_viewporter);
 
-	// Set up surface
-	surface.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
+	// Set up surfaces
+	init_bg(title, app_id);
+	init_fg();
 
-	surface.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, surface.wl_surface);
-	xdg_surface_add_listener(surface.xdg_surface, &xdg_surface_listener, NULL);
-
-	surface.xdg_toplevel = xdg_surface_get_toplevel(surface.xdg_surface);
-	xdg_toplevel_add_listener(surface.xdg_toplevel, &xdg_toplevel_listener, NULL);
-	xdg_toplevel_set_title(surface.xdg_toplevel, title);
-	xdg_toplevel_set_app_id(surface.xdg_toplevel, app_id);
-
-	assert(surface.wl_surface && surface.xdg_surface && surface.xdg_toplevel);
-
-	wl_surface_commit(surface.wl_surface);
+	fill_buffer.wl_buffer =
+			wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
+					globals.wp_single_pixel_buffer_manager_v1, 0, 0, 0,
+					UINT32_MAX / 3);
 
 	// Set up input
 	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(globals.wl_seat);
@@ -307,9 +360,9 @@ void app_run()
 
 void app_redraw()
 {
-	struct wl_callback *frame_callback = wl_surface_frame(surface.wl_surface);
+	struct wl_callback *frame_callback = wl_surface_frame(bg.wl_surface);
 	wl_callback_add_listener(frame_callback, &frame_listener, NULL);
-	wl_surface_commit(surface.wl_surface);
+	wl_surface_commit(bg.wl_surface);
 }
 
 void app_stop()
