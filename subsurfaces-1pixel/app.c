@@ -78,7 +78,7 @@ static void registry_global(void *data, struct wl_registry *registry,
 
 	else if (strcmp(interface, wl_seat_interface.name) == 0) {
 		globals.wl_seat =
-				wl_registry_bind(registry, name, &wl_seat_interface, 8);
+				wl_registry_bind(registry, name, &wl_seat_interface, 7);
 	}
 
 	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
@@ -114,8 +114,8 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 	wl_surface_commit(bg.wl_surface);
 
 	wl_surface_attach(fg.wl_surface, fg.fill_buffer, 0, 0);
-	wl_subsurface_set_position(fg.wl_subsurface, app.width / 3, 0);
-	wp_viewport_set_destination(fg.wp_viewport, app.width / 3, MIN(100, app.height));
+	wl_subsurface_set_position(fg.wl_subsurface, MAX(0, (app.width - 256) / 2), MAX(0, (app.height - 256) / 2));
+	wp_viewport_set_destination(fg.wp_viewport, MIN(256, app.width), MIN(256, app.height));
 	wl_surface_commit(fg.wl_surface);
 
 }
