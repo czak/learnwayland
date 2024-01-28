@@ -36,12 +36,6 @@ static struct {
 } bg;
 
 static struct {
-	struct wl_surface *wl_surface;
-	struct wl_subsurface *wl_subsurface;
-	struct wp_viewport *wp_viewport;
-} fg;
-
-static struct {
 	void (*on_key)(uint32_t key);
 	void (*on_draw)(uint32_t *pixels, int width, int height);
 
@@ -50,25 +44,6 @@ static struct {
 
 	int running;
 } app;
-
-static struct {
-	int fd;
-
-	void (*on_timer)();
-} timer;
-
-static struct buffer {
-	int fd;
-	struct wl_buffer *wl_buffer;
-
-	uint32_t *pixels;
-	int size;
-
-	int width;
-	int height;
-
-	int busy;
-} buffers[2];
 
 static struct {
 	struct wl_buffer *wl_buffer;
@@ -123,85 +98,11 @@ static const struct wl_registry_listener registry_listener = {
 	.global_remove = noop,
 };
 
-static void wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
-{
-	struct buffer *buffer = data;
-
-	buffer->busy = 0;
-}
-
-static const struct wl_buffer_listener wl_buffer_listener = {
-	.release = wl_buffer_release,
-};
-
-static struct buffer *get_buffer(int width, int height)
-{
-	struct buffer *buffer = &buffers[0];
-	if (buffer->busy) buffer = &buffers[1];
-	if (buffer->busy) return NULL;
-
-	// Reuse existing buffer if compatible
-	if (buffer->width == width && buffer->height == height)
-		return buffer;
-
-	if (buffer->wl_buffer) wl_buffer_destroy(buffer->wl_buffer);
-	if (buffer->pixels) munmap(buffer->pixels, buffer->size);
-
-	int stride = width * sizeof(uint32_t);
-	int size = stride * height;
-
-	if (buffer->fd == 0)
-		buffer->fd = memfd_create("buffer-pool", 0);
-	ftruncate(buffer->fd, size);
-
-	struct wl_shm_pool *wl_shm_pool = wl_shm_create_pool(globals.wl_shm, buffer->fd, size);
-
-	buffer->wl_buffer = wl_shm_pool_create_buffer(wl_shm_pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
-	buffer->pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, buffer->fd, 0);
-	buffer->width = width;
-	buffer->height = height;
-	buffer->size = size;
-
-	wl_buffer_add_listener(buffer->wl_buffer, &wl_buffer_listener, buffer);
-	wl_shm_pool_destroy(wl_shm_pool);
-
-	return buffer;
-}
-
-static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
-{
-	struct buffer *buffer = get_buffer(app.width, app.height);
-
-	if (!buffer) {
-		LOG("All buffers busy");
-
-		return;
-	}
-
-	if (app.on_draw)
-		app.on_draw(buffer->pixels, buffer->width, buffer->height);
-
-	wl_surface_attach(bg.wl_surface, buffer->wl_buffer, 0, 0);
-	wl_surface_damage_buffer(bg.wl_surface, 0, 0, buffer->width,
-			buffer->height);
-	wl_surface_commit(bg.wl_surface);
-
-	buffer->busy = 1;
-}
-
 static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 		uint32_t serial)
 {
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	// Foreground
-	struct buffer *buffer = get_buffer(100, 100);
-	memset(buffer->pixels, 0xff, 100 * 100 * 4);
-	wl_surface_attach(fg.wl_surface, buffer->wl_buffer, 0, 0);
-	wl_subsurface_set_position(fg.wl_subsurface, app.width / 2, app.height / 2);
-	wl_surface_commit(fg.wl_surface);
-
-	// Background
 	wl_surface_attach(bg.wl_surface, fill_buffer.wl_buffer, 0, 0);
 	wp_viewport_set_destination(bg.wp_viewport, app.width, app.height);
 	wl_surface_commit(bg.wl_surface);
@@ -249,40 +150,6 @@ static const struct wl_keyboard_listener wl_keyboard_listener = {
 	.repeat_info = noop,
 };
 
-static const struct wl_callback_listener frame_listener = {
-	.done = frame,
-};
-
-static void init_bg(const char *title, const char *app_id)
-{
-	bg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
-
-	bg.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, bg.wl_surface);
-	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
-
-	bg.xdg_toplevel = xdg_surface_get_toplevel(bg.xdg_surface);
-	xdg_toplevel_add_listener(bg.xdg_toplevel, &xdg_toplevel_listener, NULL);
-	xdg_toplevel_set_title(bg.xdg_toplevel, title);
-	xdg_toplevel_set_app_id(bg.xdg_toplevel, app_id);
-
-	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
-
-	wl_surface_commit(bg.wl_surface);
-}
-
-static void init_fg()
-{
-	fg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
-	fg.wl_subsurface = wl_subcompositor_get_subsurface(globals.wl_subcompositor,
-			fg.wl_surface, bg.wl_surface);
-	// wl_subsurface_set_position(fg.wl_subsurface, 20, 20);
-
-	fg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, fg.wl_surface);
-	// wp_viewport_set_destination(fg.wp_viewport, 20, 20);
-
-	wl_surface_commit(fg.wl_surface);
-}
-
 void app_init(int width, int height,
 		const char *title,
 		const char *app_id,
@@ -305,37 +172,40 @@ void app_init(int width, int height,
 			globals.xdg_wm_base && globals.wp_single_pixel_buffer_manager_v1 &&
 			globals.wp_viewporter);
 
-	// Set up surfaces
-	init_bg(title, app_id);
-	init_fg();
+	// Set up main surface
+	bg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
+
+	bg.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, bg.wl_surface);
+	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
+
+	bg.xdg_toplevel = xdg_surface_get_toplevel(bg.xdg_surface);
+	xdg_toplevel_add_listener(bg.xdg_toplevel, &xdg_toplevel_listener, NULL);
+	xdg_toplevel_set_title(bg.xdg_toplevel, title);
+	xdg_toplevel_set_app_id(bg.xdg_toplevel, app_id);
+
+	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
+
+	wl_surface_commit(bg.wl_surface);
 
 	fill_buffer.wl_buffer =
 			wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
-					globals.wp_single_pixel_buffer_manager_v1, 0, 0, 0,
+					globals.wp_single_pixel_buffer_manager_v1, UINT32_MAX / 6, 0, 0,
 					UINT32_MAX / 3);
 
 	// Set up input
 	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(globals.wl_seat);
 	wl_keyboard_add_listener(wl_keyboard, &wl_keyboard_listener, NULL);
-
-	// Set up timer
-	timer.fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
 }
 
 void app_run()
 {
 	enum {
 		WAYLAND,
-		TIMER,
 	};
 
 	struct pollfd pollfds[] = {
 		[WAYLAND] = {
 			.fd = wl_display_get_fd(globals.wl_display),
-			.events = POLLIN,
-		},
-		[TIMER] = {
-			.fd = timer.fd,
 			.events = POLLIN,
 		},
 	};
@@ -347,36 +217,10 @@ void app_run()
 
 		if (pollfds[WAYLAND].revents & POLLIN)
 			wl_display_dispatch(globals.wl_display);
-
-		if (pollfds[TIMER].revents & POLLIN) {
-			uint64_t expirations;
-			read(pollfds[TIMER].fd, &expirations, sizeof(expirations));
-
-			if (timer.on_timer)
-				timer.on_timer();
-		}
 	}
-}
-
-void app_redraw()
-{
-	struct wl_callback *frame_callback = wl_surface_frame(bg.wl_surface);
-	wl_callback_add_listener(frame_callback, &frame_listener, NULL);
-	wl_surface_commit(bg.wl_surface);
 }
 
 void app_stop()
 {
 	app.running = 0;
-}
-
-void app_set_timer(int interval, void (*on_timer)())
-{
-	timer.on_timer = on_timer;
-
-    struct itimerspec ts = {
-        .it_interval = { .tv_sec = interval, .tv_nsec = 0 },
-        .it_value    = { .tv_sec = interval, .tv_nsec = 0 },
-    };
-    timerfd_settime(timer.fd, 0, &ts, NULL);
 }

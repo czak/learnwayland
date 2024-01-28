@@ -2,19 +2,10 @@
 
 static int offset = 0;
 
-static void on_timer()
-{
-	offset += 100;
-	app_redraw();
-}
-
 static void on_key(uint32_t key)
 {
 	if (key == 1)
 		app_stop();
-	else if (key < 10) {
-		app_set_timer(key - 1, on_timer);
-	}
 }
 
 static void on_draw(uint32_t *pixels, int width, int height)

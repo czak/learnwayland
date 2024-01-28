@@ -10,8 +10,4 @@ void app_init(int width, int height,
 
 void app_run();
 
-void app_redraw();
-
 void app_stop();
-
-void app_set_timer(int interval, void (*on_timer)());
