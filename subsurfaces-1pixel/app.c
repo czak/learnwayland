@@ -109,15 +109,16 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 {
 	xdg_surface_ack_configure(xdg_surface, serial);
 
+	wl_surface_attach(fg.wl_surface, fg.fill_buffer, 0, 0);
+	wp_viewport_set_destination(fg.wp_viewport, MIN(256, app.width), MIN(256, app.height));
+	// From https://wayland.app/protocols/wayland#wl_subsurface:request:set_position
+	// The scheduled coordinates will take effect whenever the state of the parent surface is applied.
+	wl_subsurface_set_position(fg.wl_subsurface, MAX(0, (app.width - 256) / 2), MAX(0, (app.height - 256) / 2));
+	wl_surface_commit(fg.wl_surface);
+
 	wl_surface_attach(bg.wl_surface, bg.fill_buffer, 0, 0);
 	wp_viewport_set_destination(bg.wp_viewport, app.width, app.height);
 	wl_surface_commit(bg.wl_surface);
-
-	wl_surface_attach(fg.wl_surface, fg.fill_buffer, 0, 0);
-	wl_subsurface_set_position(fg.wl_subsurface, MAX(0, (app.width - 256) / 2), MAX(0, (app.height - 256) / 2));
-	wp_viewport_set_destination(fg.wp_viewport, MIN(256, app.width), MIN(256, app.height));
-	wl_surface_commit(fg.wl_surface);
-
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -189,26 +190,31 @@ void app_init(int width, int height,
 	bg.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, bg.wl_surface);
 	bg.xdg_toplevel = xdg_surface_get_toplevel(bg.xdg_surface);
 	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
+	bg.fill_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
+			globals.wp_single_pixel_buffer_manager_v1, 0, 0, UINT32_MAX / 4,
+			UINT32_MAX / 3);
 	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
 	xdg_toplevel_add_listener(bg.xdg_toplevel, &xdg_toplevel_listener, NULL);
 	xdg_toplevel_set_title(bg.xdg_toplevel, title);
 	xdg_toplevel_set_app_id(bg.xdg_toplevel, app_id);
+	// After creating a role-specific object and setting it up, the client must
+	// perform an initial commit without any buffer attached. The compositor
+	// will reply with initial wl_surface state such as
+	// wl_surface.preferred_buffer_scale followed by an xdg_surface.configure
+	// event. The client must acknowledge it and is then allowed to attach a
+	// buffer to map the surface.
 	wl_surface_commit(bg.wl_surface);
-
-	bg.fill_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
-			globals.wp_single_pixel_buffer_manager_v1, 0, 0, UINT32_MAX / 4,
-			UINT32_MAX / 3);
 
 	// Set up subsurface
 	fg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
 	fg.wl_subsurface = wl_subcompositor_get_subsurface(globals.wl_subcompositor, fg.wl_surface, bg.wl_surface);
 	fg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, fg.wl_surface);
-	wl_subsurface_set_position(fg.wl_subsurface, 10, 10);
-	wl_surface_commit(fg.wl_surface);
-
 	fg.fill_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
 			globals.wp_single_pixel_buffer_manager_v1, UINT32_MAX / 6, 0, 0,
 			UINT32_MAX / 3);
+	wl_subsurface_set_position(fg.wl_subsurface, 10, 10);
+	wl_subsurface_set_desync(fg.wl_subsurface);
+	wl_surface_commit(fg.wl_surface);
 
 	// Set up input
 	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(globals.wl_seat);
