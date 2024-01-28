@@ -33,7 +33,17 @@ static struct {
 	struct xdg_surface *xdg_surface;
 	struct xdg_toplevel *xdg_toplevel;
 	struct wp_viewport *wp_viewport;
+
+	struct wl_buffer *fill_buffer;
 } bg;
+
+static struct {
+	struct wl_surface *wl_surface;
+	struct wl_subsurface *wl_subsurface;
+	struct wp_viewport *wp_viewport;
+
+	struct wl_buffer *fill_buffer;
+} fg;
 
 static struct {
 	void (*on_key)(uint32_t key);
@@ -44,10 +54,6 @@ static struct {
 
 	int running;
 } app;
-
-static struct {
-	struct wl_buffer *wl_buffer;
-} fill_buffer;
 
 static void noop() {}
 
@@ -103,9 +109,15 @@ static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
 {
 	xdg_surface_ack_configure(xdg_surface, serial);
 
-	wl_surface_attach(bg.wl_surface, fill_buffer.wl_buffer, 0, 0);
+	wl_surface_attach(bg.wl_surface, bg.fill_buffer, 0, 0);
 	wp_viewport_set_destination(bg.wp_viewport, app.width, app.height);
 	wl_surface_commit(bg.wl_surface);
+
+	wl_surface_attach(fg.wl_surface, fg.fill_buffer, 0, 0);
+	wl_subsurface_set_position(fg.wl_subsurface, app.width / 3, 0);
+	wp_viewport_set_destination(fg.wp_viewport, app.width / 3, MIN(100, app.height));
+	wl_surface_commit(fg.wl_surface);
+
 }
 
 static const struct xdg_surface_listener xdg_surface_listener = {
@@ -174,23 +186,29 @@ void app_init(int width, int height,
 
 	// Set up main surface
 	bg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
-
 	bg.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, bg.wl_surface);
-	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
-
 	bg.xdg_toplevel = xdg_surface_get_toplevel(bg.xdg_surface);
+	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
+	xdg_surface_add_listener(bg.xdg_surface, &xdg_surface_listener, NULL);
 	xdg_toplevel_add_listener(bg.xdg_toplevel, &xdg_toplevel_listener, NULL);
 	xdg_toplevel_set_title(bg.xdg_toplevel, title);
 	xdg_toplevel_set_app_id(bg.xdg_toplevel, app_id);
-
-	bg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, bg.wl_surface);
-
 	wl_surface_commit(bg.wl_surface);
 
-	fill_buffer.wl_buffer =
-			wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
-					globals.wp_single_pixel_buffer_manager_v1, UINT32_MAX / 6, 0, 0,
-					UINT32_MAX / 3);
+	bg.fill_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
+			globals.wp_single_pixel_buffer_manager_v1, 0, 0, UINT32_MAX / 4,
+			UINT32_MAX / 3);
+
+	// Set up subsurface
+	fg.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
+	fg.wl_subsurface = wl_subcompositor_get_subsurface(globals.wl_subcompositor, fg.wl_surface, bg.wl_surface);
+	fg.wp_viewport = wp_viewporter_get_viewport(globals.wp_viewporter, fg.wl_surface);
+	wl_subsurface_set_position(fg.wl_subsurface, 10, 10);
+	wl_surface_commit(fg.wl_surface);
+
+	fg.fill_buffer = wp_single_pixel_buffer_manager_v1_create_u32_rgba_buffer(
+			globals.wp_single_pixel_buffer_manager_v1, UINT32_MAX / 6, 0, 0,
+			UINT32_MAX / 3);
 
 	// Set up input
 	struct wl_keyboard *wl_keyboard = wl_seat_get_keyboard(globals.wl_seat);
