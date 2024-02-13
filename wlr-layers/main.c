@@ -217,11 +217,11 @@ void app_init(int width, int height,
 	assert(surface.wl_surface && surface.zwlr_layer_surface_v1);
 	zwlr_layer_surface_v1_add_listener(surface.zwlr_layer_surface_v1,
 			&zwlr_layer_surface_v1_listener, NULL);
-	zwlr_layer_surface_v1_set_size(surface.zwlr_layer_surface_v1, 0, 100);
-	zwlr_layer_surface_v1_set_anchor(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT + ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP + ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
-	zwlr_layer_surface_v1_set_exclusive_zone(surface.zwlr_layer_surface_v1, 400);
-	zwlr_layer_surface_v1_set_keyboard_interactivity(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE);
-	zwlr_layer_surface_v1_set_margin(surface.zwlr_layer_surface_v1, 10, 20, 0, 20);
+	zwlr_layer_surface_v1_set_size(surface.zwlr_layer_surface_v1, 400, 400);
+	zwlr_layer_surface_v1_set_anchor(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP);
+	// zwlr_layer_surface_v1_set_exclusive_zone(surface.zwlr_layer_surface_v1, 100);
+	zwlr_layer_surface_v1_set_keyboard_interactivity(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
+	zwlr_layer_surface_v1_set_margin(surface.zwlr_layer_surface_v1, 200, 0, 0, 0);
 	wl_surface_commit(surface.wl_surface);
 
 	// Set up input
