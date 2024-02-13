@@ -20,6 +20,7 @@ protocols = declare_dependency(
     'protocols/xdg-decoration-unstable-v1.c',
     'protocols/single-pixel-buffer-v1.c',
     'protocols/viewporter.c',
+    'protocols/wlr-layer-shell-unstable-v1.c',
   ],
   include_directories: 'protocols',
 )
