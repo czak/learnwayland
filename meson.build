@@ -21,6 +21,7 @@ protocols = declare_dependency(
     'protocols/single-pixel-buffer-v1.c',
     'protocols/viewporter.c',
   ],
+  include_directories: 'protocols',
 )
 
 subdir('animation')
@@ -36,3 +37,4 @@ subdir('single-pixel-with-decorations')
 subdir('subsurfaces')
 subdir('subsurfaces-1pixel')
 subdir('toplevel-events')
+subdir('wlr-layers')
