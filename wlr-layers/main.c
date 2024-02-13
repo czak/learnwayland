@@ -213,10 +213,15 @@ void app_init(int width, int height,
 	surface.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
 	surface.zwlr_layer_surface_v1 = zwlr_layer_shell_v1_get_layer_surface(
 			globals.zwlr_layer_shell_v1, surface.wl_surface, NULL,
-			ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "learnwayland");
+			ZWLR_LAYER_SHELL_V1_LAYER_TOP, "learnwayland");
 	assert(surface.wl_surface && surface.zwlr_layer_surface_v1);
 	zwlr_layer_surface_v1_add_listener(surface.zwlr_layer_surface_v1,
 			&zwlr_layer_surface_v1_listener, NULL);
+	zwlr_layer_surface_v1_set_size(surface.zwlr_layer_surface_v1, 0, 100);
+	zwlr_layer_surface_v1_set_anchor(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT + ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP + ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+	zwlr_layer_surface_v1_set_exclusive_zone(surface.zwlr_layer_surface_v1, 400);
+	zwlr_layer_surface_v1_set_keyboard_interactivity(surface.zwlr_layer_surface_v1, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE);
+	zwlr_layer_surface_v1_set_margin(surface.zwlr_layer_surface_v1, 10, 20, 0, 20);
 	wl_surface_commit(surface.wl_surface);
 
 	// Set up input
@@ -257,10 +262,10 @@ static void on_draw(uint32_t *pixels, int width, int height)
 {
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
-			uint8_t r = x ^ y;
-			uint8_t g = x ^ y;
-			uint8_t b = x ^ y;
-			uint8_t a = 0x0f;
+			uint8_t r = ((uint8_t) x ^ (uint8_t) y) * 0.2;
+			uint8_t g = ((uint8_t) x ^ (uint8_t) y) * 0.2;
+			uint8_t b = ((uint8_t) x ^ (uint8_t) y) * 0.2;
+			uint8_t a = 0x4f;
 			pixels[y * width + x] = (a << 24) + (r << 16) + (g << 8) + b;
 		}
 	}
