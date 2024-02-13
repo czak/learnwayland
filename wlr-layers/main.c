@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <wayland-client.h>
 
-#include "xdg-shell.h"
+#include "wlr-layer-shell-unstable-v1.h"
 #include "log.h"
 
 static struct {
@@ -17,13 +17,12 @@ static struct {
 	struct wl_shm *wl_shm;
 	struct wl_compositor *wl_compositor;
 	struct wl_seat *wl_seat;
-	struct xdg_wm_base *xdg_wm_base;
+	struct zwlr_layer_shell_v1 *zwlr_layer_shell_v1;
 } globals;
 
 static struct {
 	struct wl_surface *wl_surface;
-	struct xdg_surface *xdg_surface;
-	struct xdg_toplevel *xdg_toplevel;
+	struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1;
 } surface;
 
 static struct {
@@ -70,9 +69,9 @@ static void registry_global(void *data, struct wl_registry *registry,
 				wl_registry_bind(registry, name, &wl_seat_interface, 8);
 	}
 
-	else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-		globals.xdg_wm_base =
-				wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
+	else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
+		globals.zwlr_layer_shell_v1 =
+				wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 4);
 	}
 	// clang-format on
 }
@@ -148,36 +147,28 @@ static void frame(void *data, struct wl_callback *wl_callback, uint32_t time)
 	buffer->busy = 1;
 }
 
-static void xdg_surface_configure(void *data, struct xdg_surface *xdg_surface,
-		uint32_t serial)
+static void zwlr_layer_surface_v1_configure(void *data,
+		struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1, uint32_t serial,
+		uint32_t width, uint32_t height)
 {
-	xdg_surface_ack_configure(xdg_surface, serial);
+	zwlr_layer_surface_v1_ack_configure(zwlr_layer_surface_v1, serial);
+
+	if (width > 0) app.width = width;
+	if (height > 0) app.height = height;
 
 	frame(NULL, NULL, 0);
 }
 
-static const struct xdg_surface_listener xdg_surface_listener = {
-	.configure = xdg_surface_configure,
-};
-
-static void xdg_toplevel_configure(void *data,
-		struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height,
-		struct wl_array *states)
-{
-	if (width > 0) app.width = width;
-	if (height > 0) app.height = height;
-}
-
-static void xdg_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
+static void zwlr_layer_surface_v1_closed(void *data,
+		struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1)
 {
 	app.running = 0;
 }
 
-static const struct xdg_toplevel_listener xdg_toplevel_listener = {
-	.configure = xdg_toplevel_configure,
-	.close = xdg_toplevel_close,
-	.configure_bounds = noop,
-	.wm_capabilities = noop,
+static const struct zwlr_layer_surface_v1_listener zwlr_layer_surface_v1_listener = {
+	.configure = zwlr_layer_surface_v1_configure,
+	.closed = zwlr_layer_surface_v1_closed,
+
 };
 
 static void wl_keyboard_key(void *data, struct wl_keyboard *wl_keyboard,
@@ -215,17 +206,17 @@ void app_init(int width, int height,
 	wl_registry_add_listener(globals.wl_registry, &registry_listener, NULL);
 	wl_display_roundtrip(globals.wl_display);
 
-	assert(globals.wl_shm && globals.wl_compositor && globals.wl_seat && globals.xdg_wm_base);
+	assert(globals.wl_shm && globals.wl_compositor && globals.wl_seat &&
+			globals.zwlr_layer_shell_v1);
 
 	// Set up surface
 	surface.wl_surface = wl_compositor_create_surface(globals.wl_compositor);
-	surface.xdg_surface = xdg_wm_base_get_xdg_surface(globals.xdg_wm_base, surface.wl_surface);
-	surface.xdg_toplevel = xdg_surface_get_toplevel(surface.xdg_surface);
-	assert(surface.wl_surface && surface.xdg_surface && surface.xdg_toplevel);
-	xdg_surface_add_listener(surface.xdg_surface, &xdg_surface_listener, NULL);
-	xdg_toplevel_add_listener(surface.xdg_toplevel, &xdg_toplevel_listener, NULL);
-	xdg_toplevel_set_title(surface.xdg_toplevel, title);
-	xdg_toplevel_set_app_id(surface.xdg_toplevel, app_id);
+	surface.zwlr_layer_surface_v1 = zwlr_layer_shell_v1_get_layer_surface(
+			globals.zwlr_layer_shell_v1, surface.wl_surface, NULL,
+			ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "learnwayland");
+	assert(surface.wl_surface && surface.zwlr_layer_surface_v1);
+	zwlr_layer_surface_v1_add_listener(surface.zwlr_layer_surface_v1,
+			&zwlr_layer_surface_v1_listener, NULL);
 	wl_surface_commit(surface.wl_surface);
 
 	// Set up input
@@ -269,7 +260,7 @@ static void on_draw(uint32_t *pixels, int width, int height)
 			uint8_t r = x ^ y;
 			uint8_t g = x ^ y;
 			uint8_t b = x ^ y;
-			uint8_t a = 0x7f;
+			uint8_t a = 0x0f;
 			pixels[y * width + x] = (a << 24) + (r << 16) + (g << 8) + b;
 		}
 	}
