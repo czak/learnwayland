@@ -11,3 +11,7 @@ meson compile -C build
 ```
 
 Then run e.g. `./build/animation/sample`.
+
+## License
+
+Unless a file states otherwise (e.g. protocol files), code in this repository is [unlicensed](https://github.com/czak/learnwayland/blob/master/UNLICENSE).
